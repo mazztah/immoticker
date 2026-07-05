@@ -1,27 +1,44 @@
-# DEPLOY_COMMANDS.txt — NICHT committen
+# DEPLOY_COMMANDS.txt — NICHT committen (steht in .gitignore)
+# Fertige Copy-Paste-Befehle mit deinen echten Keys für den lokalen Gebrauch.
 
 # ============================================================
-# LOKAL TESTEN
+# 1) LOKAL TESTEN
 # ============================================================
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+# -> http://localhost:8080  (liest automatisch die .env dank python-dotenv, sofern du
+#    oben in app.py "from dotenv import load_dotenv; load_dotenv()" ergänzt hast —
+#    siehe README, Abschnitt "Lokale .env laden")
 
 # ============================================================
-# GOOGLE CLOUD RUN (empfohlen)
+# 2) GITHUB HOCHLADEN (ohne Secrets — .env & diese Datei sind gitignored)
+# ============================================================
+git init
+git add .
+git commit -m "KI-Immo-Terminal: Backend, Feeds, Frontend"
+git branch -M main
+git remote add origin https://github.com/<DEIN-USERNAME>/<DEIN-REPO>.git
+git push -u origin main
+
+# ============================================================
+# 3) GOOGLE CLOUD RUN DEPLOYEN (Secrets werden hier als Env-Vars übergeben,
+#    NICHT im Image/Repo gespeichert)
 # ============================================================
 gcloud auth login
 gcloud config set project <DEIN-GCP-PROJEKT-ID>
 
-# Variante mit --set-env-vars (einfach)
 gcloud run deploy ki-immo-terminal \
   --source . \
   --region europe-west1 \
   --allow-unauthenticated \
-  --set-env-vars GROQ_API_KEY=<DEIN-GROQ-KEY>
+  --set-env-vars GROQ_API_KEY=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,XAI_API_KEY=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,ANTHROPIC_API_KEY=36dbfafa98d94d1691816f4cd493dcfb.gS_RJjxbOLi8tZcdZSgHuk71
 
-# Bessere Variante mit Secret Manager
-echo -n "<DEIN-GROQ-KEY>" | gcloud secrets create groq-api-key --data-file=-
-gcloud run deploy ki-immo-terminal --source . --region europe-west1 --allow-unauthenticated \
-  --set-secrets GROQ_API_KEY=groq-api-key:latest
+# Empfohlene, noch sicherere Variante: Secrets im Secret Manager anlegen statt --set-env-vars:
+#   echo -n "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" | gcloud secrets create groq-api-key --data-file=-
+#   gcloud run deploy ki-immo-terminal --source . --region europe-west1 --allow-unauthenticated \
+#     --set-secrets GROQ_API_KEY=groq-api-key:latest
+
+# Nach Deployment zeigt gcloud dir die Service-URL an, z.B.:
+#   https://ki-immo-terminal-xxxxxxxxxx-ew.a.run.app

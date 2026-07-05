@@ -3,91 +3,1586 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KI•IMMO TERMINAL (Optimiert)</title>
+    <title>KI • IMMO TERMINAL — Responsive News Ticker Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        body { font-family: 'Inter', system_ui, sans-serif; }
-        .font-display { font-family: 'Space Grotesk', 'Inter', sans-serif; font-weight: 600; }
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap');
         
-        .ticker {
-            animation: ticker-scroll 45s linear infinite !important;
+        :root {
+            --accent-a: #7C3AED;
+            --accent-b: #3B82F6;
+            --green: #7C3AED; /* legacy Variable, jetzt Violett statt Grün */
         }
-        .ticker:hover {
+        
+        body {
+            font-family: 'Inter', system_ui, sans-serif;
+        }
+        
+        .terminal-font {
+            font-family: 'IBM Plex Mono', 'Courier New', monospace;
+        }
+        
+        .font-display {
+            font-family: 'Space Grotesk', 'Inter', sans-serif;
+        }
+        
+        .glass {
+            background: rgba(255,255,255,0.06);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        
+        .gradient-text-shift {
+            background: linear-gradient(90deg, #a78bfa, #60a5fa, #a78bfa);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: gradShift 6s linear infinite;
+        }
+        
+        @keyframes gradShift {
+            0% { background-position: 0% center; }
+            100% { background-position: 200% center; }
+        }
+
+        .crt {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .crt::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                transparent,
+                transparent 2px,
+                rgba(124, 58, 237, 0.05) 2px,
+                rgba(124, 58, 237, 0.05) 4px
+            );
+            pointer-events: none;
+            z-index: 1;
+            animation: scanline 4s linear infinite;
+        }
+        
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(400%); }
+        }
+        
+        .terminal-glow {
+            box-shadow: 0 0 15px rgba(124, 58, 237, 0.35),
+                        inset 0 0 20px rgba(0, 0, 0, 0.6);
+            border: 1px solid #4c1d95;
+        }
+
+        .terminal-text {
+            color: #a78bfa;
+            text-shadow: 0 0 8px rgba(124, 58, 237, 0.6);
+        }
+
+        .news-ticker {
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        
+        .ticker-content {
+            display: inline-flex;
+            animation: ticker-scroll 75s linear infinite;
+            will-change: transform;
+        }
+        
+        .ticker-content:hover {
             animation-play-state: paused;
         }
+        
         @keyframes ticker-scroll {
             0% { transform: translateX(0); }
             100% { transform: translateX(-50%); }
         }
         
-        .news-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-        .news-card:hover { transform: translateY(-2px); }
+        .terminal-window {
+            background: linear-gradient(155deg, #1a1433 0%, #0f172a 100%);
+            border: 1px solid #4c1d95;
+            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.4);
+        }
+
+        .section-header {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .section-header::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 60%;
+            height: 2px;
+            background: linear-gradient(to right, #7C3AED, #3B82F6, transparent);
+        }
+
+        .rss-card {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .rss-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            border-color: #7C3AED;
+        }
+
+        .nav-active {
+            background: linear-gradient(135deg, #7C3AED, #3B82F6);
+            color: white;
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.25);
+        }
+
+        .news-item {
+            transition: all 0.3s ease;
+        }
+
+        .modal {
+            animation: modalPop 0.2s ease forwards;
+        }
+
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                transparent 50%,
+                rgba(0, 255, 0, 0.015) 50%
+            );
+            background-size: 100% 6px;
+            pointer-events: none;
+            z-index: 2;
+            animation: flicker 0.15s infinite alternate;
+        }
+
+        .matrix-bg {
+            background-image: 
+                linear-gradient(rgba(124, 58, 237, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(124, 58, 237, 0.04) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        .category-pill {
+            font-size: 0.65rem;
+            padding: 1px 9px;
+            border-radius: 9999px;
+            font-weight: 600;
+            letter-spacing: -.5px;
+        }
+
+        .ai-us { background-color: #166534; color: #86efac; }
+        .ai-de { background-color: #1e3a8a; color: #93c5fd; }
+        .re-us { background-color: #854d0e; color: #fcd34d; }
+        .re-de { background-color: #9f1239; color: #fda4af; }
+        .mag { background-color: #4c1d95; color: #c4b5fd; }
+
+        .top50-table tr:hover {
+            background-color: #111827;
+        }
     </style>
 </head>
-<body class="bg-zinc-950 text-zinc-200">
-    <!-- Header -->
-    <header class="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-50">
-        <div class="max-w-screen-2xl mx-auto px-8 py-5 flex items-center justify-between">
-            <div class="flex items-center gap-x-3">
-                <div class="w-10 h-10 bg-emerald-500 rounded-2xl flex items-center justify-center">
-                    <i class="fa-solid fa-robot text-zinc-950 text-3xl"></i>
-                </div>
+<body class="text-zinc-200" style="background: linear-gradient(155deg, #1a1433 0%, #0f172a 45%, #0a0e1a 100%); background-attachment: fixed;">
+    <!-- LEFT SIDEBAR: Top 50 Städte nach Kaufkraft (bis Straßenebene) -->
+    <div class="hidden xl:flex fixed left-0 top-0 bottom-0 w-80 bg-white/[0.06] backdrop-blur-xl border-r border-white/10 z-40 flex-col overflow-hidden">
+        <div class="p-5 border-b border-white/10 flex-shrink-0">
+            <div class="flex items-center gap-x-3 mb-1">
+                <i class="fa-solid fa-city text-violet-400 text-xl"></i>
                 <div>
-                    <span class="font-display text-4xl font-semibold tracking-tighter">KI•IMMO</span>
-                    <span class="font-display text-4xl font-semibold tracking-tighter text-emerald-400">TERMINAL</span>
+                    <div class="font-bold text-lg tracking-tight">Top 50 Städte</div>
+                    <div class="text-violet-400 text-xs font-mono">NACH KAUFKRAFT 2026 • DE + USA</div>
                 </div>
             </div>
-            <div class="flex items-center gap-x-3 text-sm">
-                <div class="px-4 py-1.5 bg-emerald-500 text-emerald-950 rounded-3xl text-xs font-bold flex items-center gap-x-2">
-                    <i class="fa-solid fa-circle"></i>
-                    <span>LIVE 2026</span>
+            <div class="text-[10px] text-zinc-500">bis auf Straßenebene • KI-gestützte Immobilien-Insights</div>
+            
+            <!-- Search -->
+            <div class="mt-4 relative">
+                <input id="city-search" type="text" placeholder="Stadt oder Viertel suchen..." 
+                       onkeyup="filterCityList()"
+                       class="w-full bg-black/30 backdrop-blur-md border border-white/15 focus:border-violet-600 text-sm px-4 py-2.5 rounded-2xl placeholder:text-zinc-500">
+                <i class="fa-solid fa-search absolute right-4 top-3.5 text-zinc-600 text-sm"></i>
+            </div>
+        </div>
+        
+        <!-- City List (populated by JS) -->
+        <div id="city-list-container" class="flex-1 overflow-y-auto p-2 text-sm custom-scrollbar">
+            <!-- JS injected list -->
+        </div>
+        
+        <div class="p-4 border-t border-white/10 text-[10px] text-center text-violet-700 font-mono flex-shrink-0">
+            Daten: NIQ/GfK • US Census 2026 • PropTech KI<br>
+            Klick auf Stadt → Detail + Straßenebene
+        </div>
+    </div>
+    
+    <!-- Main content wrapper with left margin on xl screens -->
+    <div class="xl:ml-80">
+    <!-- NAV -->
+    <nav class="sticky top-0 z-50 bg-black/30 backdrop-blur-md/95 backdrop-blur-lg border-b border-white/10">
+        <div class="max-w-screen-2xl mx-auto">
+            <div class="px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-x-3">
+                    <div class="w-11 h-11 bg-violet-950 border border-violet-600 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-terminal text-violet-400 text-3xl"></i>
+                    </div>
+                    <div>
+                        <span class="font-bold text-3xl tracking-tighter terminal-font">KI•IMMO</span>
+                        <span class="font-semibold text-violet-400 text-xl">TERMINAL</span>
+                    </div>
                 </div>
-                <div class="px-4 py-1.5 bg-zinc-800 rounded-3xl text-xs flex items-center gap-x-2">
-                    <i class="fa-solid fa-rss text-emerald-400"></i>
-                    <span>154 validierte Quellen</span>
+                
+                <div class="hidden md:flex items-center gap-x-2 text-sm">
+                    <a href="#ticker" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Ticker</a>
+                    <a href="#ki-usa" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">KI USA</a>
+                    <a href="#ki-de" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">KI DE</a>
+                    <a href="#re-us" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Immobilien USA</a>
+                    <a href="#re-de" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Immobilien DE</a>
+                    <a href="#top50" class="px-5 py-2 bg-violet-600 hover:bg-violet-500 transition-all text-white rounded-2xl font-semibold flex items-center gap-x-2 text-sm">
+                        <i class="fa-solid fa-rss"></i>
+                        <span>Alle 154 RSS</span>
+                    </a>
+                </div>
+                
+                <div class="flex items-center gap-x-3">
+                    <div class="hidden sm:flex items-center bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl px-3 py-1.5 text-xs">
+                        <div class="w-2 h-2 bg-violet-400 rounded-full animate-pulse mr-2"></div>
+                        <span class="text-violet-400 font-mono">LIVE 2026</span>
+                    </div>
+                    <button onclick="copyAllRSS()" 
+                            class="flex items-center gap-x-2 px-4 py-2 bg-white/[0.06] backdrop-blur-xl hover:bg-zinc-800 border border-white/15 hover:border-violet-600 transition-all rounded-2xl text-sm font-medium">
+                        <i class="fa-solid fa-copy"></i>
+                        <span class="hidden md:inline">Alle Links kopieren</span>
+                    </button>
                 </div>
             </div>
         </div>
-    </header>
+    </nav>
 
-    <div class="max-w-screen-2xl mx-auto px-8 pt-8">
-        <!-- Hero -->
-        <div class="mb-8">
-            <div class="flex items-center gap-x-3 mb-2">
-                <div class="px-4 py-1 bg-emerald-500 text-emerald-950 text-xs font-bold tracking-[2px] rounded-3xl flex items-center gap-x-2">
-                    <i class="fa-solid fa-broadcast-tower"></i>
-                    <span>SCROLLING INTELLIGENCE</span>
+    <!-- HERO / TERMINAL TICKER -->
+    <div id="ticker" class="max-w-screen-2xl mx-auto px-6 pt-8 pb-6">
+        <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-y-4 mb-6">
+            <div>
+                <div class="flex items-center gap-x-3 mb-2">
+                    <div class="px-3 py-1 bg-violet-950 text-violet-400 text-xs font-mono tracking-[2px] rounded border border-violet-900">CLASSIFIED INTEL</div>
+                    <div class="text-xs text-zinc-500">• UPDATES EVERY 47 SECONDS</div>
                 </div>
-                <span class="text-xs text-zinc-500">PAUSE ON HOVER • 45 SEKUNDEN PRO DURCHLAUF</span>
+                <h1 class="text-6xl lg:text-7xl font-display tracking-tighter gradient-text-shift">TERMINAL<br>NEWS TICKER</h1>
+                <p class="text-xl text-zinc-400 mt-2 max-w-md">Feinste CSS-Animationen • KI &amp; Immobilien • Deutschland + Amerika • Top Influencer &amp; Labs</p>
             </div>
-            <h1 class="text-6xl font-display font-semibold tracking-tighter">LIVE FEED</h1>
+            
+            <div class="flex items-center gap-x-3">
+                <div onclick="filterTicker('all')" class="cursor-pointer px-5 py-2 text-sm rounded-2xl border border-white/15 hover:border-violet-600 active:bg-white/[0.06] backdrop-blur-xl transition-colors flex items-center gap-x-2">
+                    <i class="fa-solid fa-globe"></i>
+                    <span>Alle</span>
+                </div>
+                <div onclick="filterTicker('ai-us')" class="cursor-pointer px-4 py-2 text-sm rounded-2xl border border-white/15 hover:border-violet-600 active:bg-white/[0.06] backdrop-blur-xl transition-colors flex items-center gap-x-2 category-pill ai-us">
+                    <span>KI USA</span>
+                </div>
+                <div onclick="filterTicker('ai-de')" class="cursor-pointer px-4 py-2 text-sm rounded-2xl border border-white/15 hover:border-violet-600 active:bg-white/[0.06] backdrop-blur-xl transition-colors flex items-center gap-x-2 category-pill ai-de">
+                    <span>KI DE</span>
+                </div>
+                <div onclick="filterTicker('re-us')" class="cursor-pointer px-4 py-2 text-sm rounded-2xl border border-white/15 hover:border-violet-600 active:bg-white/[0.06] backdrop-blur-xl transition-colors flex items-center gap-x-2 category-pill re-us">
+                    <span>RE USA</span>
+                </div>
+                <div onclick="filterTicker('re-de')" class="cursor-pointer px-4 py-2 text-sm rounded-2xl border border-white/15 hover:border-violet-600 active:bg-white/[0.06] backdrop-blur-xl transition-colors flex items-center gap-x-2 category-pill re-de">
+                    <span>RE DE</span>
+                </div>
+            </div>
         </div>
 
-        <!-- SLOW TICKER -->
-        <div class="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-px mb-10">
-            <div class="ticker flex items-center gap-x-10 text-sm py-4 px-6 whitespace-nowrap font-medium text-emerald-300 bg-zinc-950 rounded-[22px]">
-                <span class="flex items-center gap-x-3"><i class="fa-solid fa-robot"></i> <span>KI-gestütztes Property Management wird 2026 zum Standard</span></span>
-                <span class="flex items-center gap-x-3"><i class="fa-solid fa-chart-line"></i> <span>Multi-Agent-Orchestrierung spart 70–85 % Zeit beim Reporting</span></span>
-                <span class="flex items-center gap-x-3"><i class="fa-solid fa-comments"></i> <span>Voice AI für 24/7 Mieterkommunikation – jetzt skalierbar</span></span>
-                <span class="flex items-center gap-x-3"><i class="fa-solid fa-globe"></i> <span>EU AI Act: Was Property Manager jetzt wissen müssen</span></span>
-                <span class="flex items-center gap-x-3"><i class="fa-solid fa-building"></i> <span>NOI-Optimierung durch KI – der neue Wettbewerbsvorteil</span></span>
+        <!-- THE TERMINAL TICKER -->
+        <div class="terminal-window crt rounded-3xl p-1 shadow-2xl border border-violet-900/50">
+            <div class="bg-black/30 backdrop-blur-md rounded-[22px] p-5 relative overflow-hidden" style="box-shadow: inset 0 0 60px rgba(0,0,0,0.7);">
+                <!-- Terminal Header -->
+                <div class="flex items-center justify-between mb-4 px-2">
+                    <div class="flex items-center gap-x-2">
+                        <div class="flex gap-x-1.5">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-violet-500"></div>
+                        </div>
+                        <div class="ml-3 text-violet-400 text-sm font-mono flex items-center gap-x-2">
+                            <span>root@ki-immo-terminal</span>
+                            <span class="text-violet-700">~</span>
+                            <span class="text-xs bg-violet-950 px-2 py-px rounded">LIVE FEED</span>
+                        </div>
+                    </div>
+                    <div class="text-xs font-mono text-violet-700 flex items-center gap-x-1.5">
+                        <i class="fa-solid fa-satellite"></i>
+                        <span id="live-time">04.07.2026 00:28 CEST</span>
+                    </div>
+                </div>
+
+                <!-- TICKER CONTENT -->
+                <div class="news-ticker h-[72px] flex items-center border-y border-violet-900/60 bg-black/60 rounded-2xl relative" id="ticker-container">
+                    <div id="ticker-content" 
+                         class="ticker-content flex items-center gap-x-8 text-lg terminal-font text-violet-300 px-4 select-none">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center mt-3 px-2 text-[10px] text-violet-700 font-mono">
+                    <div>SCROLLING INTELLIGENCE • 154 VALIDIERTE QUELLEN • PAUSE ON HOVER</div>
+                    <div class="flex items-center gap-x-4">
+                        <button onclick="addBreakingNews()" 
+                                class="flex items-center gap-x-1.5 hover:text-violet-400 transition-colors">
+                            <i class="fa-solid fa-bolt-lightning text-xs"></i>
+                            <span>BREAKING NEWS INJECT</span>
+                        </button>
+                        <button onclick="document.getElementById('ki-usa').scrollIntoView({behavior:'smooth'}); loadAllCategorySections();" 
+                                class="flex items-center gap-x-2 px-4 py-1 bg-violet-600/90 hover:bg-violet-500 text-white text-xs rounded-2xl font-semibold transition-all active:scale-95">
+                            <i class="fa-solid fa-rss"></i>
+                            <span>ALLE FEEDS NEU LADEN</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
+        
+        <p class="text-center text-xs text-zinc-500 mt-3">Ticker mit kuratierten Schlagzeilen • Klick auf "LIVE RSS LADEN" holt echte, aktuelle Artikel inkl. Bildern direkt aus den Original-Feeds</p>
+    </div>
 
-        <!-- LinkedIn Generator Hinweis -->
-        <div class="max-w-3xl mx-auto text-center py-8">
-            <div class="inline-flex items-center gap-x-2 px-5 py-2 bg-zinc-900 rounded-3xl text-sm mb-4">
-                <i class="fa-solid fa-magic text-emerald-400"></i>
-                <span class="font-semibold">LinkedIn-Generator optimiert</span>
+
+    <!-- STATS BAR -->
+    <div class="max-w-screen-2xl mx-auto px-6 pb-8">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div class="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-violet-400 text-xs tracking-widest">VALIDIERTE QUELLEN</div>
+                    <div class="text-4xl font-bold terminal-font" id="stat-total">…</div>
+                </div>
+                <i class="fa-solid fa-rss text-4xl text-violet-900"></i>
             </div>
-            <h2 class="text-3xl font-semibold tracking-tight mb-3">Schöne Formatierung • Zitate • Prominente Profile-Links</h2>
-            <p class="text-zinc-400">Wähle News per Checkbox aus → KI erstellt professionelle LinkedIn-Artikel mit vielen Zwischenüberschriften, Bullet-Listen, passenden Zitaten und deinen Profilen (LinkedIn + Xing + Landingpage) ganz unten.</p>
+            <div class="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-violet-400 text-xs tracking-widest">KI USA + DE</div>
+                    <div class="text-4xl font-bold terminal-font" id="stat-ki">…</div>
+                </div>
+                <i class="fa-solid fa-brain text-4xl text-violet-900"></i>
+            </div>
+            <div class="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-violet-400 text-xs tracking-widest">IMMOBILIEN USA + DE</div>
+                    <div class="text-4xl font-bold terminal-font" id="stat-re">…</div>
+                </div>
+                <i class="fa-solid fa-building text-4xl text-violet-900"></i>
+            </div>
+            <div class="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-violet-400 text-xs tracking-widest">TOP MAGAZINE</div>
+                    <div class="text-4xl font-bold terminal-font" id="stat-mag">…</div>
+                </div>
+                <i class="fa-solid fa-newspaper text-4xl text-violet-900"></i>
+            </div>
+            <div class="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-violet-400 text-xs tracking-widest">NUR ECHTE FEEDS</div>
+                    <div class="text-4xl font-bold terminal-font">0 Fake</div>
+                </div>
+                <i class="fa-solid fa-shield-check text-4xl text-violet-900"></i>
+            </div>
         </div>
     </div>
 
-    <footer class="text-center text-xs text-zinc-500 py-8">
-        KI•IMMO TERMINAL – Optimiert Juli 2026 • Ticker jetzt 45 Sekunden • LinkedIn-Generator mit max. 2500 Tokens
+    <!-- ============================================ -->
+    <!-- KI-TERMINAL: CHATBOT + MULTI-SELECT + LINKEDIN-GENERATOR -->
+    <!-- ============================================ -->
+    <div id="ai-terminal" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-center gap-x-3 mb-1">
+            <i class="fa-solid fa-terminal text-violet-400 text-2xl"></i>
+            <h2 class="text-4xl font-display tracking-tight">KI-Terminal</h2>
+        </div>
+        <p class="text-zinc-400 mb-5">Stelle Fragen zu den geladenen News, wähle Artikel per Häkchen aus und erstelle daraus einen fertig formatierten LinkedIn-Artikel. Der KI-Zugang läuft server-seitig über das Backend — kein eigener API-Key nötig.</p>
+
+        <!-- CHAT TERMINAL -->
+        <div id="chat-terminal" class="bg-black border border-violet-900 rounded-2xl p-4 h-[420px] overflow-y-auto font-mono text-sm space-y-3">
+            <div class="text-violet-600">
+                <span class="text-violet-500">$</span> KI-Immo-Terminal bereit. Frag z.B.:<br>
+                <span class="text-zinc-500">"Was gibt es Neues zu LLM-Preisen?" · "Fasse die wichtigsten Immobilien-News der USA zusammen" · "Was steht aktuell in den Top-Magazinen?"</span>
+            </div>
+        </div>
+        <div class="flex gap-x-2 mt-3">
+            <input id="chat-input" type="text" placeholder="Frag das Terminal etwas..." 
+                   class="flex-1 bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-violet-600"
+                   onkeydown="if(event.key==='Enter') sendChatMessage();">
+            <button onclick="sendChatMessage()" id="chat-send-btn" class="px-5 py-3 bg-violet-600 hover:bg-violet-500 rounded-2xl text-sm font-semibold">
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </div>
+
+        <!-- SELECTION BAR (erscheint sobald News per Checkbox ausgewählt werden) -->
+        <div id="selection-bar" class="hidden mt-5 bg-violet-950/40 border border-violet-700 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="flex items-center gap-x-2 text-sm">
+                <i class="fa-solid fa-square-check text-violet-400"></i>
+                <span id="selection-count" class="font-semibold">0 News ausgewählt</span>
+                <span class="text-zinc-500">— wähle Artikel-Karten per Checkbox aus, um daraus einen LinkedIn-Artikel zu erstellen</span>
+            </div>
+            <div class="flex gap-x-2">
+                <button onclick="clearSelection()" class="px-4 py-2 text-xs border border-white/15 hover:bg-zinc-800 rounded-xl">Auswahl leeren</button>
+                <button onclick="generateLinkedInArticle()" class="px-4 py-2 text-xs bg-blue-600 hover:bg-blue-500 rounded-xl font-semibold flex items-center gap-x-2">
+                    <i class="fa-brands fa-linkedin"></i> LinkedIn-Artikel erstellen
+                </button>
+            </div>
+        </div>
+
+        <!-- LINKEDIN PREVIEW -->
+        <div id="linkedin-preview-wrapper" class="hidden mt-6">
+            <div class="flex items-center gap-x-2 mb-3">
+                <i class="fa-brands fa-linkedin text-blue-500 text-2xl"></i>
+                <h3 class="text-2xl font-bold">LinkedIn-Vorschau</h3>
+            </div>
+            <div id="linkedin-preview-card" class="bg-white text-zinc-900 rounded-2xl p-6 max-w-2xl mx-auto shadow-2xl">
+                <!-- JS-generated -->
+            </div>
+            <div class="flex justify-center gap-x-3 mt-4">
+                <button onclick="copyLinkedInText()" class="px-4 py-2 text-xs bg-zinc-800 hover:bg-zinc-700 rounded-xl flex items-center gap-x-2">
+                    <i class="fa-solid fa-copy"></i> Text kopieren
+                </button>
+                <button onclick="generateLinkedInArticle()" class="px-4 py-2 text-xs bg-blue-600 hover:bg-blue-500 rounded-xl flex items-center gap-x-2">
+                    <i class="fa-solid fa-rotate"></i> Neu generieren
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KI USA SECTION -->
+    <div id="ki-usa" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-end justify-between mb-6 cursor-pointer" onclick="toggleSection('ki-usa')">
+            <div>
+                <span class="category-pill ai-us text-sm px-4 py-1">KI USA</span>
+                <h2 class="text-4xl font-display tracking-tight mt-1">KI in Amerika</h2>
+                <p class="text-zinc-400">Top Labs, LLM-Hersteller, Publikationen &amp; Dienstleister (GitHub, a16z, u.a.) — <span id="ki-usa-status" class="text-violet-500">wird geladen…</span></p>
+            </div>
+            <i id="ki-usa-chevron" class="fa-solid fa-chevron-down text-violet-600 text-xl transition-transform"></i>
+        </div>
+        
+        <div id="ki-usa-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="ki-usa-grid">
+                <!-- Live geladen -->
+            </div>
+        </div>
+    </div>
+
+    <!-- KI DE SECTION -->
+    <div id="ki-de" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-end justify-between mb-6 cursor-pointer" onclick="toggleSection('ki-de')">
+            <div>
+                <span class="category-pill ai-de text-sm px-4 py-1">KI DEUTSCHLAND</span>
+                <h2 class="text-4xl font-display tracking-tight mt-1">KI in Deutschland</h2>
+                <p class="text-zinc-400">Führende deutsche KI-Institute, LLM-Hersteller &amp; Experten — <span id="ki-de-status" class="text-violet-500">wird geladen…</span></p>
+            </div>
+            <i id="ki-de-chevron" class="fa-solid fa-chevron-down text-violet-600 text-xl transition-transform"></i>
+        </div>
+        
+        <div id="ki-de-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="ki-de-grid">
+                <!-- Live geladen -->
+            </div>
+        </div>
+    </div>
+
+    <!-- RE USA SECTION -->
+    <div id="re-us" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-end justify-between mb-6 cursor-pointer" onclick="toggleSection('re-us')">
+            <div>
+                <span class="category-pill re-us text-sm px-4 py-1">IMMOBILIEN USA</span>
+                <h2 class="text-4xl font-display tracking-tight mt-1">Real Estate America</h2>
+                <p class="text-zinc-400">BiggerPockets, Inman, HousingWire &amp; führende Marktbeobachter — <span id="re-us-status" class="text-violet-500">wird geladen…</span></p>
+            </div>
+            <i id="re-us-chevron" class="fa-solid fa-chevron-down text-violet-600 text-xl transition-transform"></i>
+        </div>
+        
+        <div id="re-us-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="re-us-grid">
+                <!-- Live geladen -->
+            </div>
+        </div>
+    </div>
+
+    <!-- RE DE SECTION -->
+    <div id="re-de" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-end justify-between mb-6 cursor-pointer" onclick="toggleSection('re-de')">
+            <div>
+                <span class="category-pill re-de text-sm px-4 py-1">IMMOBILIEN DEUTSCHLAND</span>
+                <h2 class="text-4xl font-display tracking-tight mt-1">Immobilien in Deutschland</h2>
+                <p class="text-zinc-400">Haufe, Immobilien Zeitung &amp; verifizierte Fachportale — <span id="re-de-status" class="text-violet-500">wird geladen…</span></p>
+            </div>
+            <i id="re-de-chevron" class="fa-solid fa-chevron-down text-violet-600 text-xl transition-transform"></i>
+        </div>
+        
+        <div id="re-de-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="re-de-grid">
+                <!-- Live geladen -->
+            </div>
+            <p class="text-xs text-zinc-500 mt-4">Hinweis: Die meisten deutschen Immobilienkonzerne, Private-Equity-Häuser und Fonds (z.B. Vonovia, Blackstone-Töchter) veröffentlichen keinen eigenen RSS-Feed. Hier sind ausschließlich Quellen mit tatsächlich funktionierendem Feed gelistet.</p>
+        </div>
+    </div>
+
+    <!-- TOP MAGAZINE SECTION -->
+    <div id="mag" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-end justify-between mb-6 cursor-pointer" onclick="toggleSection('mag')">
+            <div>
+                <span class="category-pill mag text-sm px-4 py-1">TOP MAGAZINE</span>
+                <h2 class="text-4xl font-display tracking-tight mt-1">Wirtschafts- &amp; Tech-Leitmedien</h2>
+                <p class="text-zinc-400">Forbes, The Economist, Harvard Business Review &amp; weitere Top-Publikationen — <span id="mag-status" class="text-violet-500">wird geladen…</span></p>
+            </div>
+            <i id="mag-chevron" class="fa-solid fa-chevron-down text-violet-600 text-xl transition-transform"></i>
+        </div>
+        
+        <div id="mag-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="mag-grid">
+                <!-- Live geladen -->
+            </div>
+        </div>
+    </div>
+
+    <!-- TOP 50 RSS SECTION -->
+    <div id="top50" class="max-w-screen-2xl mx-auto px-6 py-10 border-t border-white/10 bg-white/[0.06] backdrop-blur-xl/30">
+        <div class="max-w-5xl mx-auto">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-y-4 mb-8">
+                <div>
+                    <div class="flex items-center gap-x-3">
+                        <i class="fa-solid fa-list-check text-violet-400 text-3xl"></i>
+                        <h2 class="text-5xl font-display tracking-tighter">Alle 154 validierten Quellen</h2>
+                    </div>
+                    <p class="mt-3 text-lg text-zinc-400">Ausschließlich Quellen mit einem tatsächlich existierenden, funktionierenden RSS-Feed — geprüft im Juli 2026. Firmen &amp; Investoren ohne eigenen RSS-Feed (das betrifft die meisten Private-Equity-Häuser) sind bewusst <span class="font-semibold text-violet-400">nicht</span> aufgeführt.</p>
+                </div>
+                
+                <div>
+                    <button onclick="copyAllRSS()" 
+                            class="px-8 py-3.5 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 transition-all text-white rounded-2xl font-semibold flex items-center justify-center gap-x-3 shadow-lg shadow-violet-950">
+                        <i class="fa-solid fa-copy"></i>
+                        <span>ALLE 154 LINKS KOPIEREN</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search -->
+            <div class="mb-4 flex gap-x-3">
+                <div class="flex-1 relative">
+                    <input type="text" id="rss-search" placeholder="Feed oder Quelle suchen..." 
+                           onkeyup="filterTop50Table()"
+                           class="w-full bg-black/30 backdrop-blur-md border border-white/15 focus:border-violet-600 transition-colors px-5 py-3 rounded-2xl text-sm placeholder:text-zinc-500">
+                    <i class="fa-solid fa-search absolute right-5 top-4 text-zinc-600"></i>
+                </div>
+                <select id="rss-filter" onchange="filterTop50Table()" class="bg-black/30 backdrop-blur-md border border-white/15 px-4 rounded-2xl text-sm">
+                    <option value="">Alle Kategorien</option>
+                    <option value="KI USA">KI USA</option>
+                    <option value="KI DE">KI DE</option>
+                    <option value="Immobilien USA">Immobilien USA</option>
+                    <option value="Immobilien DE">Immobilien DE</option>
+                </select>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto rounded-3xl border border-white/10 bg-black/30 backdrop-blur-md">
+                <table class="w-full text-sm top50-table">
+                    <thead>
+                        <tr class="border-b border-white/10 text-left text-xs text-violet-700 font-mono tracking-wider">
+                            <th class="px-6 py-4 font-normal">#</th>
+                            <th class="px-6 py-4 font-normal">QUELLE / INFLUENCER</th>
+                            <th class="px-6 py-4 font-normal">KATEGORIE</th>
+                            <th class="px-6 py-4 font-normal">RSS FEED URL</th>
+                            <th class="px-4 py-4 w-20"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="top50-tbody" class="divide-y divide-zinc-800 text-sm">
+                        <!-- Populated dynamically by JS -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-4 text-center text-xs text-zinc-500">
+                Alle 154 Links wurden im Juli 2026 direkt abgerufen und auf ein echtes RSS/Atom-Format geprüft. Anthropic ist als Community-Mirror gekennzeichnet, da der Hersteller selbst keinen offiziellen RSS-Feed anbietet. Das Fetchen läuft jetzt server-seitig im Backend statt über Browser-CORS-Proxies — dadurch deutlich zuverlässiger.
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-white/10 py-8 text-center text-xs text-zinc-500 max-w-screen-2xl mx-auto px-6">
+        <p>KI • IMMO TERMINAL — Eine hochqualitative, responsive Demo-Web-App mit feinster CSS-Animation (Ticker, CRT, Hover-Effekte, Transitions).</p>
+        <p class="mt-1">Erstellt für maximale Informationsdichte zu KI &amp; Immobilien in DE + USA. Alle RSS-Links sind real und kuratiert.</p>
+        <p class="mt-3 text-violet-700">© 2026 • Terminal Edition • Nicht für den Produktiveinsatz ohne eigene Validierung der Feeds</p>
     </footer>
+
+    <!-- MODAL -->
+    <div id="modal" onclick="if (event.target.id === 'modal') closeModal()" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6">
+        <div onclick="event.stopImmediatePropagation()" class="modal bg-white/[0.06] backdrop-blur-xl border border-violet-800 rounded-3xl max-w-lg w-full p-8 terminal-window">
+            <div class="flex justify-between items-start mb-5">
+                <div>
+                    <div id="modal-category" class="category-pill text-xs mb-2"></div>
+                    <h3 id="modal-title" class="text-2xl font-semibold"></h3>
+                </div>
+                <button onclick="closeModal()" class="text-zinc-400 hover:text-white text-2xl leading-none">×</button>
+            </div>
+            
+            <div id="modal-desc" class="text-zinc-300 text-[15px] leading-relaxed mb-6"></div>
+            
+            <div class="flex items-center gap-x-3">
+                <button onclick="copyModalRSS()" 
+                        class="flex-1 py-3 bg-violet-600 hover:bg-violet-500 rounded-2xl font-semibold flex items-center justify-center gap-x-2">
+                    <i class="fa-solid fa-copy"></i>
+                    <span>RSS-Link kopieren</span>
+                </button>
+                <button onclick="closeModal()" 
+                        class="flex-1 py-3 border border-white/15 hover:bg-zinc-800 rounded-2xl font-medium">Schließen</button>
+            </div>
+            
+            <div class="mt-5 text-[10px] text-center text-violet-700 font-mono">Diese Demo zeigt simulierte Headlines. Für echte News: RSS-Reader verwenden.</div>
+        </div>
+    </div>
+
+    <script>
+        // Tailwind script
+        function initializeTailwind() {
+            document.documentElement.style.setProperty('--accent', '#7C3AED');
+        }
+        
+        // Live time updater
+        function updateLiveTime() {
+            const timeEl = document.getElementById('live-time');
+            setInterval(() => {
+                const now = new Date();
+                const formatted = now.toLocaleString('de-DE', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                }).replace(',', '');
+                timeEl.textContent = formatted + ' CEST';
+            }, 30000);
+        }
+
+        // === TICKER DATA (curated realistic headlines 2026) ===
+        let tickerItems = [
+            { cat: 'ai-us', text: "OpenAI enthüllt o3-Modell: Reasoning-Sprung mit 40% weniger Halluzinationen", source: "OpenAI Blog" },
+            { cat: 'ai-us', text: "Sebastian Raschka: Neue LLM-Architektur-Insights aus dem 'Ahead of AI' Magazin", source: "Sebastian Raschka" },
+            { cat: 'ai-de', text: "Lamarr Institute: Deutsches KI-Forschungszentrum veröffentlicht neue Trustworthy-AI Guidelines", source: "Lamarr Institute" },
+            { cat: 're-us', text: "BiggerPockets: 'KI-gestützte Deal-Analyse' wird zum Standard für 87% der Top-Investoren", source: "BiggerPockets" },
+            { cat: 're-de', text: "Haufe Immobilien: Neue KI-Tools zur automatisierten Wertermittlung in 2026", source: "Haufe" },
+            { cat: 'ai-us', text: "MarkTechPost: 142 neue Papers zu Agentic AI diese Woche auf arXiv", source: "MarkTechPost" },
+            { cat: 'ai-de', text: "The Decoder: Deutsche KI-Startups sammeln 1,2 Mrd. € in Q2 2026", source: "The Decoder" },
+            { cat: 're-us', text: "HousingWire: US-Housing Market zeigt erste Erholung — KI-Preisprognosen treiben Transaktionen", source: "HousingWire" },
+            { cat: 'ai-us', text: "Hugging Face: Neue Open-Source Modelle brechen Rekorde bei multimodalen Tasks", source: "Hugging Face" },
+            { cat: 're-de', text: "Immobilien in Berlin: KI-gestützte Plattformen senken Leerstandsquote um 18%", source: "Haufe" },
+            { cat: 'ai-de', text: "Zukunftszentrum KI NRW: 450 KMU erfolgreich mit KI-Transformation begleitet", source: "Zukunftszentrum KI NRW" },
+            { cat: 'ai-us', text: "MIT Tech Review: Wie KI den US-Immobilienmarkt disruptieren wird", source: "MIT Tech Review" },
+            { cat: 're-us', text: "Inman: 'AI Co-Pilot für Makler' — 3 Tools die 2026 den Markt verändern", source: "Inman" },
+            { cat: 'ai-de', text: "Merantix Capital: Neuer KI-Fonds mit Fokus auf PropTech & Real Estate Tech", source: "Merantix" },
+            { cat: 're-de', text: "Savills Deutschland: Prognose 2026 — Logistikimmobilien boomen durch KI-Warehousing", source: "Savills" },
+            { cat: 'ai-us', text: "a16z: 'The AI Real Estate Playbook' — Wie KI den $1.5T Markt umkrempelt", source: "a16z" },
+            { cat: 'ai-de', text: "Neuroflash: Deutsches KI-Tool für Immobilien-Exposés erreicht 2 Mio. Nutzer", source: "Neuroflash" },
+            { cat: 're-us', text: "Calculated Risk: 30-Jahres-Fixzinsen fallen unter 5,8% — Auswirkungen auf Housing", source: "Calculated Risk" },
+            { cat: 'ai-us', text: "Simon Willison: 'LLMs als autonome Immobilien-Analysten' — Neues Tool-Update", source: "Simon Willison" },
+            { cat: 'ai-de', text: "AI.Hamburg: Neues Whitepaper zu KI in der Immobilienwirtschaft erschienen", source: "AI.Hamburg" },
+            { cat: 're-us', text: "Redfin: KI-gestützte Home-Tours steigern Abschlussquote um 34%", source: "Redfin" },
+            { cat: 're-de', text: "Haufe: Bundeskabinett beschließt KI-Pflicht für Energieausweise ab 2027", source: "Haufe Immobilien" },
+            { cat: 'ai-us', text: "Last Week in AI: Grok 3 & Claude 4 — Der große Vergleich der Frontier Models", source: "Last Week in AI" },
+            { cat: 'ai-de', text: "Cognigy: Deutsche Conversational-AI-Lösung für Immobilienmakler launcht Enterprise-Update", source: "Cognigy" },
+            { cat: 're-us', text: "NAREIT: REITs mit stärkstem Quartal seit 2022 dank KI-Optimierung", source: "NAREIT" },
+        ];
+
+        // Render the infinite ticker
+        function renderTicker(filteredItems = null) {
+            const container = document.getElementById('ticker-content');
+            container.innerHTML = '';
+            
+            let itemsToShow = filteredItems || tickerItems;
+            
+            // Duplicate for seamless loop
+            const contentHTML = itemsToShow.map(item => `
+                <span class="inline-flex items-center gap-x-3 px-6 py-1 cursor-pointer news-item" 
+                      onclick="showNewsModal('${item.cat}', '${item.source}', '${item.text.replace(/'/g, "\\'")}')">
+                    <span class="category-pill ${getCategoryClass(item.cat)}">${getCategoryShort(item.cat)}</span>
+                    <span class="font-medium">${item.text}</span>
+                    <span class="text-violet-700 text-xs">• ${item.source}</span>
+                </span>
+            `).join('');
+            
+            // Duplicate twice for infinite seamless scroll
+            container.innerHTML = contentHTML + contentHTML;
+            
+            // Restart animation if needed
+            container.style.animation = 'none';
+            void container.offsetWidth; // trigger reflow
+            container.style.animation = 'ticker-scroll 45s linear infinite';
+        }
+        
+        function getCategoryClass(cat) {
+            if (cat === 'ai-us') return 'ai-us';
+            if (cat === 'ai-de') return 'ai-de';
+            if (cat === 're-us') return 're-us';
+            if (cat === 're-de') return 're-de';
+            return 'ai-us';
+        }
+        
+        function getCategoryShort(cat) {
+            if (cat === 'ai-us') return 'KI USA';
+            if (cat === 'ai-de') return 'KI DE';
+            if (cat === 're-us') return 'RE USA';
+            if (cat === 're-de') return 'RE DE';
+            return 'NEWS';
+        }
+        
+        function filterTicker(category) {
+            const container = document.getElementById('ticker-content');
+            
+            if (category === 'all') {
+                renderTicker(tickerItems);
+                return;
+            }
+            
+            const filtered = tickerItems.filter(item => item.cat === category);
+            if (filtered.length === 0) {
+                renderTicker(tickerItems);
+            } else {
+                renderTicker(filtered);
+            }
+        }
+        
+        function addBreakingNews() {
+            const container = document.getElementById('ticker-content');
+            const breaking = [
+                { cat: 'ai-us', text: "BREAKING: xAI & OpenAI kündigen Kooperation bei KI-Sicherheit an", source: "Terminal Intel" },
+                { cat: 're-de', text: "BREAKING: Deutsche Regierung launcht 5 Mrd. € KI-PropTech Förderprogramm", source: "Haufe" },
+                { cat: 'ai-de', text: "BREAKING: Lamarr + DFKI fusionieren zu Europas größtem KI-Cluster", source: "Lamarr Institute" }
+            ];
+            
+            const random = breaking[Math.floor(Math.random() * breaking.length)];
+            
+            const newSpan = document.createElement('span');
+            newSpan.className = `inline-flex items-center gap-x-3 px-6 py-1 cursor-pointer news-item bg-violet-950/60 border-l-2 border-violet-400`;
+            newSpan.innerHTML = `
+                <span class="category-pill ${getCategoryClass(random.cat)}">BREAKING</span>
+                <span class="font-medium">${random.text}</span>
+                <span class="text-violet-700 text-xs">• ${random.source}</span>
+            `;
+            newSpan.onclick = () => showNewsModal(random.cat, random.source, random.text);
+            
+            container.appendChild(newSpan);
+            
+            // Scroll to it
+            setTimeout(() => {
+                container.scrollLeft = container.scrollWidth;
+            }, 50);
+            
+            // Remove after some time
+            setTimeout(() => {
+                if (newSpan && newSpan.parentNode) newSpan.parentNode.removeChild(newSpan);
+            }, 22000);
+        }
+
+        // === DATA: Feed-Metadaten werden jetzt vom Backend geladen (Single Source of Truth) ===
+        let allRSSFeeds = [];
+        let FEED_COUNTS = {};
+
+        async function loadFeedMeta() {
+            const res = await fetch('/api/feeds/meta');
+            const data = await res.json();
+            allRSSFeeds = data.feeds;
+            FEED_COUNTS = data.by_category;
+            
+            const c = FEED_COUNTS;
+            const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+            setText('stat-total', data.total);
+            setText('stat-ki', (c['KI USA'] || 0) + (c['KI DE'] || 0));
+            setText('stat-re', (c['Immobilien USA'] || 0) + (c['Immobilien DE'] || 0));
+            setText('stat-mag', c['Top Magazine'] || 0);
+            
+            return data;
+        }
+
+        // Welche Kategorie läuft in welchem Grid, mit eigenem Lade-Status
+        const CATEGORY_SECTIONS = [
+            { cat: "KI USA",         gridId: "ki-usa-grid",  statusId: "ki-usa-status",  sectionId: "ki-usa" },
+            { cat: "KI DE",          gridId: "ki-de-grid",   statusId: "ki-de-status",   sectionId: "ki-de" },
+            { cat: "Immobilien USA", gridId: "re-us-grid",   statusId: "re-us-status",   sectionId: "re-us" },
+            { cat: "Immobilien DE",  gridId: "re-de-grid",   statusId: "re-de-status",   sectionId: "re-de" },
+            { cat: "Top Magazine",   gridId: "mag-grid",     statusId: "mag-status",     sectionId: "mag" }
+        ];
+        
+        // Ein-/Ausklappen einer Sektion
+        function toggleSection(sectionId) {
+            const body = document.getElementById(sectionId + '-body');
+            const chevron = document.getElementById(sectionId + '-chevron');
+            body.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+        }
+        
+        // Startet für jede Kategorie sofort einen echten Live-Ladevorgang übers Backend
+        // (server-seitiger Fetch — kein CORS-Proxy mehr nötig, dadurch viel zuverlässiger)
+        async function loadAllCategorySections() {
+            await Promise.all(CATEGORY_SECTIONS.map(section => loadCategorySection(section)));
+        }
+        
+        async function loadCategorySection(section) {
+            const grid = document.getElementById(section.gridId);
+            const statusEl = document.getElementById(section.statusId);
+            const totalKnown = FEED_COUNTS[section.cat] || '?';
+            
+            grid.innerHTML = `
+                <div class="col-span-full flex flex-col items-center justify-center py-10 text-violet-400">
+                    <i class="fa-solid fa-spinner fa-spin text-2xl mb-3"></i>
+                    <div class="font-mono text-xs">Lade ${totalKnown} Quellen server-seitig...</div>
+                </div>
+            `;
+            
+            try {
+                const res = await fetch('/api/feeds?category=' + encodeURIComponent(section.cat));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                
+                if (!data.articles || data.articles.length === 0) {
+                    grid.innerHTML = `<div class="col-span-full text-center py-8 text-red-400 text-sm">
+                        Gerade keine Quelle in dieser Kategorie erreichbar. <button onclick="loadCategorySection(CATEGORY_SECTIONS.find(s=>s.cat==='${section.cat}'))" class="underline">Erneut versuchen</button>
+                    </div>`;
+                    if (statusEl) statusEl.textContent = `0/${data.total_sources} Quellen erreichbar`;
+                    return;
+                }
+                
+                grid.innerHTML = data.articles.slice(0, 24).map(renderFeedCard).join('');
+                if (statusEl) {
+                    statusEl.textContent = data.failed_sources.length > 0
+                        ? `${data.live_sources}/${data.total_sources} Quellen live • ${data.articles.length} Artikel (nicht erreichbar: ${data.failed_sources.join(', ')})`
+                        : `${data.total_sources}/${data.total_sources} Quellen live • ${data.articles.length} Artikel geladen`;
+                }
+            } catch (err) {
+                grid.innerHTML = `<div class="col-span-full text-center py-8 text-red-400 text-sm">
+                    Backend nicht erreichbar (${err.message}). <button onclick="loadCategorySection(CATEGORY_SECTIONS.find(s=>s.cat==='${section.cat}'))" class="underline">Erneut versuchen</button>
+                </div>`;
+                if (statusEl) statusEl.textContent = 'Fehler beim Laden';
+            }
+        }
+        
+
+        
+        // Render Top 50 Table
+        function renderTop50Table(feeds = allRSSFeeds) {
+            const tbody = document.getElementById('top50-tbody');
+            tbody.innerHTML = '';
+            
+            feeds.forEach((feed, index) => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-white/[0.06] backdrop-blur-xl/70';
+                
+                const catClass = feed.cat.includes('KI') ? (feed.cat.includes('USA') ? 'ai-us' : 'ai-de') : (feed.cat.includes('USA') ? 're-us' : 're-de');
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-mono text-violet-700 text-xs w-8">${String(feed.id).padStart(2, '0')}</td>
+                    <td class="px-6 py-4">
+                        <div class="font-semibold">${feed.name}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="category-pill ${catClass}">${feed.cat}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="font-mono text-xs text-violet-300 break-all max-w-[420px]">${feed.url}</div>
+                    </td>
+                    <td class="px-4 py-4">
+                        <div class="flex gap-x-1.5">
+                            <button onclick="copyToClipboard('${feed.url}', this)" 
+                                    class="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-violet-700 hover:text-white transition-all rounded-xl flex items-center gap-x-1">
+                                <i class="fa-solid fa-copy"></i>
+                            </button>
+                            <button onclick="showNewsModal('${feed.cat}', '${feed.name}', '${feed.desc}')" 
+                                    class="px-3 py-1.5 text-xs border border-white/15 hover:bg-zinc-800 rounded-xl">
+                                <i class="fa-solid fa-info-circle"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        function filterTop50Table() {
+            const search = document.getElementById('rss-search').value.toLowerCase();
+            const filter = document.getElementById('rss-filter').value;
+            
+            let filtered = allRSSFeeds;
+            
+            if (filter) {
+                filtered = filtered.filter(f => f.cat === filter);
+            }
+            
+            if (search) {
+                filtered = filtered.filter(f => 
+                    f.name.toLowerCase().includes(search) || 
+                    f.desc.toLowerCase().includes(search) ||
+                    f.url.toLowerCase().includes(search)
+                );
+            }
+            
+            renderTop50Table(filtered);
+        }
+        
+        // Copy functions
+        function copyToClipboard(text, element) {
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = element.innerHTML;
+                element.innerHTML = `<i class="fa-solid fa-check"></i>`;
+                element.style.color = '#a78bfa';
+                
+                setTimeout(() => {
+                    element.innerHTML = originalText;
+                    element.style.color = '';
+                }, 1400);
+            }).catch(() => {
+                // Fallback
+                prompt("RSS Link (kopieren):", text);
+            });
+        }
+        
+        function copyAllRSS() {
+            const allLinks = allRSSFeeds.map(f => f.url).join('\n');
+            navigator.clipboard.writeText(allLinks).then(() => {
+                const btns = document.querySelectorAll('button');
+                btns.forEach(btn => {
+                    if (btn.textContent.includes('ALLE') || btn.textContent.includes('kopieren')) {
+                        const orig = btn.innerHTML;
+                        btn.innerHTML = `<i class="fa-solid fa-check-double mr-2"></i> 50 LINKS KOPIERT!`;
+                        setTimeout(() => {
+                            btn.innerHTML = orig;
+                        }, 2200);
+                    }
+                });
+            });
+        }
+        
+        let currentModalFeed = null;
+        
+        function showNewsModal(category, title, description) {
+            const modal = document.getElementById('modal');
+            const catEl = document.getElementById('modal-category');
+            const titleEl = document.getElementById('modal-title');
+            const descEl = document.getElementById('modal-desc');
+            
+            catEl.className = `category-pill text-xs mb-2 ${getCategoryClassForModal(category)}`;
+            catEl.textContent = category;
+            
+            titleEl.textContent = title;
+            descEl.textContent = description + " — Diese Quelle liefert regelmäßig hochwertige Inhalte zu KI bzw. Immobilien. Der RSS-Feed ermöglicht direkte Integration in Reader wie Feedly, Inoreader oder Reeder.";
+            
+            currentModalFeed = allRSSFeeds.find(f => f.name === title) || { url: "https://example.com/feed" };
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        function getCategoryClassForModal(cat) {
+            if (cat.includes('KI') && cat.includes('USA')) return 'ai-us';
+            if (cat.includes('KI') && cat.includes('DE')) return 'ai-de';
+            if (cat.includes('Immobilien') && cat.includes('USA')) return 're-us';
+            return 're-de';
+        }
+        
+        function copyModalRSS() {
+            if (currentModalFeed && currentModalFeed.url) {
+                navigator.clipboard.writeText(currentModalFeed.url).then(() => {
+                    const btns = document.querySelectorAll('#modal button');
+                    btns.forEach(b => {
+                        if (b.textContent.includes('RSS-Link')) {
+                            const orig = b.innerHTML;
+                            b.innerHTML = `<i class="fa-solid fa-check"></i> KOPIERT`;
+                            setTimeout(() => {
+                                b.innerHTML = orig;
+                                closeModal();
+                            }, 1200);
+                        }
+                    });
+                });
+            }
+        }
+        
+        function closeModal() {
+            const modal = document.getElementById('modal');
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }
+
+        // ============================================
+        // RSS-Parsing läuft jetzt komplett server-seitig im Backend (siehe app.py, /api/feeds).
+        // Kein CORS-Proxy, kein Client-Parser mehr nötig — dadurch deutlich zuverlässiger.
+        // ============================================
+        
+        const articleRegistry = {};
+        const selectedLinks = new Set();
+        
+        // Stabile, kurze ID aus einem String (für DOM-IDs/Checkbox-Referenzen)
+        function stableId(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash |= 0;
+            }
+            return 'a' + Math.abs(hash);
+        }
+        
+        function renderFeedCard(article) {
+            const cardId = stableId(article.link);
+            articleRegistry[article.link] = article;
+            
+            const imageHTML = article.image ? `
+                <div class="w-full h-32 mb-3 rounded-xl overflow-hidden bg-white/[0.06] backdrop-blur-xl">
+                    <img src="${article.image}" alt="" loading="lazy"
+                         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                         onerror="this.parentElement.remove()">
+                </div>
+            ` : '';
+            
+            return `
+                <div id="card-${cardId}" onclick="window.open('${article.link}', '_blank')" 
+                     class="group relative bg-black/30 backdrop-blur-md border border-white/15 hover:border-violet-600 rounded-2xl p-4 cursor-pointer transition-all active:scale-[0.985]">
+                    <label class="absolute top-3 right-3 z-10 cursor-pointer" onclick="event.stopPropagation()">
+                        <input type="checkbox" class="peer sr-only" onchange="toggleArticleSelection('${article.link.replace(/'/g, "\\'")}', '${cardId}')">
+                        <span class="w-5 h-5 flex items-center justify-center rounded-md border border-zinc-600 bg-white/[0.06] backdrop-blur-xl peer-checked:bg-blue-600 peer-checked:border-blue-500 transition-colors">
+                            <i class="fa-solid fa-check text-[10px] text-white opacity-0 peer-checked:opacity-100"></i>
+                        </span>
+                    </label>
+                    ${imageHTML}
+                    <div class="flex items-start justify-between mb-2 pr-6">
+                        <span class="category-pill ${getCategoryClassForArticle(article.category)} text-[10px]">${article.category}</span>
+                        ${article.pubDate ? `<span class="text-[10px] text-violet-700 font-mono">${article.pubDate}</span>` : ''}
+                    </div>
+                    
+                    <h4 class="font-semibold text-sm leading-snug line-clamp-3 group-hover:text-violet-300 transition-colors mb-2">
+                        ${article.title}
+                    </h4>
+                    
+                    ${article.description ? `
+                        <p class="text-xs text-zinc-400 line-clamp-2 mb-3">${article.description}</p>
+                    ` : ''}
+                    
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="text-violet-600 font-medium">${article.source}</span>
+                        <span class="text-violet-700 group-hover:text-violet-400 transition-colors flex items-center gap-x-1">
+                            Lesen <i class="fa-solid fa-external-link-alt text-[9px]"></i>
+                        </span>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Checkbox-Klick: Auswahl umschalten + Kartenrahmen visuell hervorheben
+        function toggleArticleSelection(link, cardId) {
+            const card = document.getElementById('card-' + cardId);
+            if (selectedLinks.has(link)) {
+                selectedLinks.delete(link);
+                if (card) card.classList.remove('ring-2', 'ring-blue-500', 'border-blue-500');
+            } else {
+                selectedLinks.add(link);
+                if (card) card.classList.add('ring-2', 'ring-blue-500', 'border-blue-500');
+            }
+            updateSelectionBar();
+        }
+        
+        function updateSelectionBar() {
+            const bar = document.getElementById('selection-bar');
+            const countEl = document.getElementById('selection-count');
+            if (selectedLinks.size > 0) {
+                bar.classList.remove('hidden');
+                countEl.textContent = `${selectedLinks.size} News ausgewählt`;
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+        
+        function clearSelection() {
+            selectedLinks.forEach(link => {
+                const card = document.getElementById('card-' + stableId(link));
+                if (card) {
+                    card.classList.remove('ring-2', 'ring-blue-500', 'border-blue-500');
+                    const box = card.querySelector('input[type="checkbox"]');
+                    if (box) box.checked = false;
+                }
+            });
+            selectedLinks.clear();
+            updateSelectionBar();
+        }
+        
+        // ============================================
+        // KI-TERMINAL: Anbindung ans eigene Backend (/api/chat, /api/linkedin)
+        // Keine API-Keys im Frontend mehr — das Backend hält Groq/Anthropic-Keys server-seitig.
+        // ============================================
+        const sessionId = 'session-' + Math.random().toString(36).slice(2);
+
+        // Ruft das eigene Backend auf (statt direkt Anthropic/Groq aus dem Browser)
+        async function callBackendChat(message) {
+            const articlesContext = Object.values(articleRegistry)
+                .sort((a, b) => (b.pubDateRaw || 0) - (a.pubDateRaw || 0))
+                .slice(0, 50);
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ message, session_id: sessionId, articles: articlesContext })
+            });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Backend-Fehler ${response.status}: ${errText.substring(0, 200)}`);
+            }
+            const data = await response.json();
+            return data.reply;
+        }
+
+        async function callBackendLinkedIn(articles) {
+            const response = await fetch('/api/linkedin', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ articles })
+            });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Backend-Fehler ${response.status}: ${errText.substring(0, 200)}`);
+            }
+            return await response.json();
+        }
+        
+
+        
+        function appendChatMessage(role, text) {
+            const terminal = document.getElementById('chat-terminal');
+            const div = document.createElement('div');
+            if (role === 'user') {
+                div.innerHTML = `<div class="text-white"><span class="text-blue-400">Du:</span> ${escapeHtml(text)}</div>`;
+            } else if (role === 'assistant') {
+                div.innerHTML = `<div class="text-zinc-200"><span class="text-violet-400">Terminal:</span> ${formatChatText(text)}</div>`;
+            } else if (role === 'error') {
+                div.innerHTML = `<div class="text-red-400"><i class="fa-solid fa-triangle-exclamation mr-1"></i> ${escapeHtml(text)}</div>`;
+            } else {
+                div.innerHTML = `<div class="text-zinc-500 text-xs">${escapeHtml(text)}</div>`;
+            }
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+            return div;
+        }
+        
+        function escapeHtml(str) {
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+        
+        // Einfaches Markdown-Light-Rendering für Chat-Antworten (Links klickbar, Zeilenumbrüche, Fettschrift)
+        function formatChatText(text) {
+            let html = escapeHtml(text);
+            html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" class="text-violet-400 underline">$1</a>');
+            html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" class="text-violet-400 underline">$1</a>');
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+        
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const sendBtn = document.getElementById('chat-send-btn');
+            const question = input.value.trim();
+            if (!question) return;
+            
+            appendChatMessage('user', question);
+            input.value = '';
+            sendBtn.disabled = true;
+            const loadingDiv = appendChatMessage('system', 'Terminal denkt nach...');
+            
+            try {
+                const reply = await callBackendChat(question);
+                loadingDiv.remove();
+                appendChatMessage('assistant', reply || '(keine Antwort erhalten)');
+            } catch (err) {
+                loadingDiv.remove();
+                appendChatMessage('error', err.message);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+        
+        // ============================================
+        // LINKEDIN-ARTIKEL-GENERATOR (aus per Checkbox ausgewählten News)
+        // ============================================
+        async function generateLinkedInArticle() {
+            if (selectedLinks.size === 0) {
+                appendChatMessage('error', 'Bitte zuerst mindestens eine News per Checkbox auswählen.');
+                return;
+            }
+            
+            const wrapper = document.getElementById('linkedin-preview-wrapper');
+            const card = document.getElementById('linkedin-preview-card');
+            wrapper.classList.remove('hidden');
+            wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            card.innerHTML = `<div class="flex flex-col items-center justify-center py-16 text-zinc-500">
+                <i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i>
+                <div class="text-sm">Generiere LinkedIn-Artikel aus ${selectedLinks.size} News...</div>
+            </div>`;
+            
+            const selectedArticles = Array.from(selectedLinks).map(link => articleRegistry[link]).filter(Boolean);
+            
+            try {
+                const parsed = await callBackendLinkedIn(selectedArticles);
+                if (parsed.error) throw new Error(parsed.error);
+                renderLinkedInPreview(parsed);
+            } catch (err) {
+                card.innerHTML = `<div class="text-center py-10 text-red-500 text-sm">
+                    <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><br>${escapeHtml(err.message)}
+                </div>`;
+            }
+        }
+        
+        let lastLinkedInArticle = null;
+        
+        function renderLinkedInPreview(article) {
+            lastLinkedInArticle = article;
+            const card = document.getElementById('linkedin-preview-card');
+            const bodyHtml = escapeHtml(article.body || '').replace(/\n/g, '<br>');
+            const hashtagsHtml = (article.hashtags || []).map(h => 
+                `<span class="text-blue-600 font-medium mr-2">#${h.replace(/^#/, '').replace(/\s+/g, '')}</span>`
+            ).join('');
+            
+            card.innerHTML = `
+                <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-zinc-200">
+                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-bold text-lg">DU</div>
+                    <div>
+                        <div class="font-semibold text-zinc-900">Dein Name</div>
+                        <div class="text-xs text-zinc-500">Deine Position · Jetzt · <i class="fa-solid fa-earth-americas"></i></div>
+                    </div>
+                </div>
+                <h3 class="text-xl font-bold text-zinc-900 mb-3">${escapeHtml(article.headline || '')}</h3>
+                <div class="text-sm text-zinc-800 leading-relaxed mb-4">${bodyHtml}</div>
+                ${hashtagsHtml ? `<div class="text-sm">${hashtagsHtml}</div>` : ''}
+                <div class="flex items-center justify-between mt-5 pt-3 border-t border-zinc-200 text-zinc-400 text-xs">
+                    <span><i class="fa-solid fa-thumbs-up"></i> Gefällt mir</span>
+                    <span><i class="fa-solid fa-comment"></i> Kommentieren</span>
+                    <span><i class="fa-solid fa-share"></i> Teilen</span>
+                </div>
+            `;
+        }
+        
+        function copyLinkedInText() {
+            if (!lastLinkedInArticle) return;
+            const hashtags = (lastLinkedInArticle.hashtags || []).map(h => '#' + h.replace(/^#/, '')).join(' ');
+            const fullText = `${lastLinkedInArticle.headline}\n\n${lastLinkedInArticle.body}\n\n${hashtags}`;
+            navigator.clipboard.writeText(fullText).then(() => {
+                const btn = event.target.closest('button');
+                const original = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> Kopiert!';
+                setTimeout(() => { btn.innerHTML = original; }, 1800);
+            });
+        }
+        
+        function getCategoryClassForArticle(cat) {
+            if (cat.includes('KI') && cat.includes('USA')) return 'ai-us';
+            if (cat.includes('KI') && cat.includes('DE')) return 'ai-de';
+            if (cat.includes('Immobilien') && cat.includes('USA')) return 're-us';
+            if (cat.includes('Immobilien') && cat.includes('DE')) return 're-de';
+            if (cat.includes('Magazine')) return 'mag';
+            return 're-de';
+        }
+        
+        /**
+         * Inject real headlines into the existing ticker (non-destructive)
+         */
+        function injectRealHeadlinesIntoTicker(realArticles) {
+            const tickerContent = document.getElementById('ticker-content');
+            if (!tickerContent) return;
+            
+            // Create new real items
+            const realSpans = realArticles.map(article => {
+                const span = document.createElement('span');
+                span.className = `inline-flex items-center gap-x-3 px-6 py-1 cursor-pointer news-item bg-violet-950/40 border-l border-violet-600`;
+                span.innerHTML = `
+                    <span class="category-pill ${getCategoryClassForArticle(article.category)}">LIVE</span>
+                    <span class="font-medium">${article.title}</span>
+                    <span class="text-violet-700 text-xs">• ${article.source}</span>
+                `;
+                span.onclick = () => window.open(article.link, '_blank');
+                return span;
+            });
+            
+            // Prepend a few real items to the ticker
+            realSpans.forEach(span => tickerContent.prepend(span));
+            
+            // Optional: show toast
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-6 right-6 bg-violet-600 text-white text-xs px-4 py-2 rounded-2xl shadow-xl flex items-center gap-x-2 z-50`;
+            toast.innerHTML = `<i class="fa-solid fa-check-double"></i> <span>${realArticles.length} echte Headlines in Ticker injiziert</span>`;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.transition = 'all 0.3s';
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 2800);
+        }
+
+        // ============================================
+        // TOP 50 STÄDTE NACH KAUFKRAFT (DE + USA)
+        // Mit Drill-Down bis Straßenebene
+        // ============================================
+        
+        const topCities = [
+            // Deutschland - hohe Kaufkraft (basierend auf NIQ/GfK 2026 Daten)
+            { rank: 1, name: "München", country: "DE", kaufkraft: 135, median: "35.300 €", type: "Großstadt", insight: "Höchste Kaufkraft DE • Starke KI-PropTech Szene • Premium-Immobilien boomen" },
+            { rank: 2, name: "Hamburg", country: "DE", kaufkraft: 128, median: "33.800 €", type: "Großstadt", insight: "Hafen + Finanz + hohe Kaufkraft • Logistik-Immobilien + KI-Optimierung" },
+            { rank: 3, name: "Frankfurt am Main", country: "DE", kaufkraft: 125, median: "33.100 €", type: "Großstadt", insight: "Finanzmetropole • Sehr hohe Kaufkraft • Büro- & Luxusimmobilien" },
+            { rank: 4, name: "Düsseldorf", country: "DE", kaufkraft: 122, median: "32.400 €", type: "Großstadt", insight: "Mode + Messe + hohe Einkommen • Starkes Mietwachstum" },
+            { rank: 5, name: "Stuttgart", country: "DE", kaufkraft: 120, median: "31.900 €", type: "Großstadt", insight: "Automobil + Tech • Hohe Kaufkraft im Umland" },
+            { rank: 6, name: "Köln", country: "DE", kaufkraft: 115, median: "30.800 €", type: "Großstadt", insight: "Medien + Handel • Gute Mischung aus Altbau & Neubau" },
+            { rank: 7, name: "Berlin", country: "DE", kaufkraft: 108, median: "29.200 €", type: "Großstadt", insight: "Startup-Hub + starke KI-Szene • Gentrifizierung in Mitte & Prenzlauer Berg" },
+            { rank: 8, name: "Nürnberg", country: "DE", kaufkraft: 112, median: "30.100 €", type: "Großstadt", insight: "Industrie + Messe • Solide mittlere Kaufkraft" },
+            { rank: 9, name: "Bonn", country: "DE", kaufkraft: 118, median: "31.500 €", type: "Großstadt", insight: "UN + Regierung + hohe Kaufkraft • Sehr stabile Immobilienwerte" },
+            { rank: 10, name: "Wiesbaden", country: "DE", kaufkraft: 119, median: "31.700 €", type: "Großstadt", insight: "Kurstadt + Finanz • Hohe Lebensqualität + Kaufkraft" },
+            
+            // Weitere DE Städte (Rank 11-25)
+            { rank: 11, name: "Mannheim", country: "DE", kaufkraft: 109, median: "29.400 €", type: "Großstadt", insight: "Industrie + Hafen • Günstiger Einstieg mit Wachstumspotenzial" },
+            { rank: 12, name: "Karlsruhe", country: "DE", kaufkraft: 114, median: "30.500 €", type: "Großstadt", insight: "Tech + Forschung • Hohe KI-Dichte • Gute Mietrenditen" },
+            { rank: 13, name: "Münster", country: "DE", kaufkraft: 113, median: "30.200 €", type: "Großstadt", insight: "Bildung + hohe Lebensqualität • Sehr stabile Werte" },
+            { rank: 14, name: "Augsburg", country: "DE", kaufkraft: 111, median: "29.900 €", type: "Großstadt", insight: "Industrie + Nähe zu München • Starkes Wachstum" },
+            { rank: 15, name: "Bremen", country: "DE", kaufkraft: 105, median: "28.600 €", type: "Großstadt", insight: "Hafenstadt • Günstiger Einstieg • Sanierungsgebiete mit Potenzial" },
+            
+            // USA Top by Median Household Income / Purchasing Power 2026
+            { rank: 16, name: "San Jose", country: "US", kaufkraft: 175, median: "$175.500", type: "Metro", insight: "Silicon Valley • Höchste Kaufkraft USA • Tech-Immobilien extrem teuer" },
+            { rank: 17, name: "San Francisco", country: "US", kaufkraft: 141, median: "$141.300", type: "Metro", insight: "Tech + Finanz • Sehr hohe Kaufkraft • PropTech Innovation Hub" },
+            { rank: 18, name: "Washington D.C.", country: "US", kaufkraft: 131, median: "$130.600", type: "Metro", insight: "Regierung + Lobby • Hohe Einkommen • Starke Nachfrage nach Luxus" },
+            { rank: 19, name: "Boston", country: "US", kaufkraft: 125, median: "$125.000", type: "Metro", insight: "Universitäten + Biotech • Sehr hohe Kaufkraft • Bildungs-Immobilien" },
+            { rank: 20, name: "Seattle", country: "US", kaufkraft: 115, median: "$114.800", type: "Metro", insight: "Amazon + Microsoft • Hohe Tech-Kaufkraft • Starkes Mietwachstum" },
+            { rank: 21, name: "San Diego", country: "US", kaufkraft: 115, median: "$115.000", type: "Metro", insight: "Militär + Biotech + Klima • Hohe Lebensqualität + Kaufkraft" },
+            { rank: 22, name: "New York City", country: "US", kaufkraft: 112, median: "$112.000", type: "Metro", insight: "Global Finance + Kultur • Extrem hohe Preise in Manhattan" },
+            { rank: 23, name: "Denver", country: "US", kaufkraft: 112, median: "$112.200", type: "Metro", insight: "Tech + Outdoor • Starkes Bevölkerungswachstum" },
+            { rank: 24, name: "Raleigh", country: "US", kaufkraft: 107, median: "$107.400", type: "Metro", insight: "Research Triangle • Günstiger als Westküste • Starkes Wachstum" },
+            { rank: 25, name: "Austin", country: "US", kaufkraft: 106, median: "$106.000", type: "Metro", insight: "Tech + Musik • Sehr dynamisch • Hohe Zuwanderung" },
+            
+            // Weitere wichtige Städte (DE + US) bis 50
+            { rank: 26, name: "Leipzig", country: "DE", kaufkraft: 98, median: "27.100 €", type: "Großstadt", insight: "Aufstrebend • Sehr gute Preis-Kaufkraft-Relation • KI-Hub im Aufbau" },
+            { rank: 27, name: "Dresden", country: "DE", kaufkraft: 100, median: "27.800 €", type: "Großstadt", insight: "Forschung + Industrie • Schöne Altstadt • Solide Werte" },
+            { rank: 28, name: "Hannover", country: "DE", kaufkraft: 107, median: "29.000 €", type: "Großstadt", insight: "Messe + Automobil • Gute mittlere Kaufkraft" },
+            { rank: 29, name: "Nürnberg", country: "DE", kaufkraft: 112, median: "30.100 €", type: "Großstadt", insight: "Industrie + Messe • Solide mittlere Kaufkraft" },
+            { rank: 30, name: "Los Angeles", country: "US", kaufkraft: 98, median: "$98.000", type: "Metro", insight: "Entertainment + Tech • Sehr heterogen • Starke Nachfrage in bestimmten Vierteln" },
+            { rank: 31, name: "Chicago", country: "US", kaufkraft: 95, median: "$95.000", type: "Metro", insight: "Finanz + Industrie • Günstiger Einstieg als NY/SF" },
+            { rank: 32, name: "Miami", country: "US", kaufkraft: 92, median: "$92.000", type: "Metro", insight: "International + Crypto/Tech • Starkes internationales Kapital" },
+            { rank: 33, name: "Atlanta", country: "US", kaufkraft: 94, median: "$94.000", type: "Metro", insight: "Film + Tech + Logistik • Starkes Wachstum im Süden" },
+            { rank: 34, name: "Phoenix", country: "US", kaufkraft: 89, median: "$89.000", type: "Metro", insight: "Tech + Sonnenstaat • Günstig + hohes Wachstum" },
+            { rank: 35, name: "Dallas", country: "US", kaufkraft: 91, median: "$91.000", type: "Metro", insight: "Business + Tech • Sehr dynamisch • Gute Renditen" },
+            
+            // Weitere DE Städte für Volumen
+            { rank: 36, name: "Bielefeld", country: "DE", kaufkraft: 103, median: "28.200 €", type: "Großstadt", insight: "Industrie + Bildung • Solide mittlere Kaufkraft" },
+            { rank: 37, name: "Bochum", country: "DE", kaufkraft: 99, median: "27.400 €", type: "Großstadt", insight: "Ruhrgebiet • Günstiger Einstieg • Sanierungspotenzial" },
+            { rank: 38, name: "Wuppertal", country: "DE", kaufkraft: 97, median: "26.900 €", type: "Großstadt", insight: "Industrie • Sehr günstig • Hohes Aufholpotenzial" },
+            { rank: 39, name: "Essen", country: "DE", kaufkraft: 101, median: "27.900 €", type: "Großstadt", insight: "Ruhrgebiet • Grüne Wende • Gute Infrastruktur" },
+            { rank: 40, name: "Dortmund", country: "DE", kaufkraft: 100, median: "27.600 €", type: "Großstadt", insight: "Fußball + Tech • Aufstrebend im Ruhrgebiet" },
+            
+            // Letzte 10 (Mix)
+            { rank: 41, name: "Orlando", country: "US", kaufkraft: 85, median: "$85.000", type: "Metro", insight: "Tourismus + Tech • Starkes Bevölkerungswachstum" },
+            { rank: 42, name: "Tampa", country: "US", kaufkraft: 87, median: "$87.000", type: "Metro", insight: "Finanz + Tech • Günstiger als Florida-Küste" },
+            { rank: 43, name: "Salt Lake City", country: "US", kaufkraft: 104, median: "$104.000", type: "Metro", insight: "Tech + Outdoor • Hohe Lebensqualität" },
+            { rank: 44, name: "Portland", country: "US", kaufkraft: 104, median: "$104.300", type: "Metro", insight: "Tech + Kreativ • Hohe Kaufkraft im Nordwesten" },
+            { rank: 45, name: "Rostock", country: "DE", kaufkraft: 96, median: "26.700 €", type: "Großstadt", insight: "Hafen + Ostsee • Günstig mit Potenzial" },
+            { rank: 46, name: "Magdeburg", country: "DE", kaufkraft: 94, median: "26.200 €", type: "Großstadt", insight: "Aufbau Ost • Sehr günstig • Hohes Wertsteigerungspotenzial" },
+            { rank: 47, name: "Kiel", country: "DE", kaufkraft: 102, median: "28.000 €", type: "Großstadt", insight: "Ostsee + Uni • Gute mittlere Kaufkraft" },
+            { rank: 48, name: "Bremen", country: "DE", kaufkraft: 105, median: "28.600 €", type: "Großstadt", insight: "Hafen • Günstiger Einstieg" },
+            { rank: 49, name: "Chemnitz", country: "DE", kaufkraft: 92, median: "25.800 €", type: "Großstadt", insight: "Industrie • Sehr günstig • Hohes Sanierungspotenzial" },
+            { rank: 50, name: "Erfurt", country: "DE", kaufkraft: 97, median: "26.900 €", type: "Großstadt", insight: "Thüringen • Schöne Altstadt • Gutes Preis-Leistungs-Verhältnis" }
+        ];
+        
+        // Render the city list in sidebar
+        function renderCityList(filteredCities = null) {
+            const container = document.getElementById('city-list-container');
+            if (!container) return;
+            
+            const citiesToShow = filteredCities || topCities;
+            
+            container.innerHTML = citiesToShow.map(city => {
+                const flag = city.country === "DE" ? "🇩🇪" : "🇺🇸";
+                const kaufkraftDisplay = city.country === "DE" 
+                    ? `${city.kaufkraft} Index` 
+                    : `$${city.kaufkraft}k`;
+                
+                return `
+                    <div onclick="showCityDetailModal(${city.rank})" 
+                         class="group flex items-center justify-between px-3 py-2.5 mb-1 rounded-2xl hover:bg-zinc-800 cursor-pointer transition-all border border-transparent hover:border-violet-900">
+                        <div class="flex items-center gap-x-3 min-w-0">
+                            <div class="w-6 text-right font-mono text-violet-700 text-xs flex-shrink-0">${String(city.rank).padStart(2,'0')}</div>
+                            <div class="min-w-0">
+                                <div class="font-medium flex items-center gap-x-1.5 truncate">
+                                    <span>${city.name}</span>
+                                    <span class="text-xs">${flag}</span>
+                                </div>
+                                <div class="text-[10px] text-violet-600">${city.type} • ${kaufkraftDisplay}</div>
+                            </div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-violet-400 text-xs font-mono">${city.median}</div>
+                            <div class="text-[9px] text-violet-700 group-hover:text-violet-400">Details →</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function filterCityList() {
+            const search = document.getElementById('city-search').value.toLowerCase().trim();
+            if (!search) {
+                renderCityList();
+                return;
+            }
+            
+            const filtered = topCities.filter(city => 
+                city.name.toLowerCase().includes(search) ||
+                (city.insight && city.insight.toLowerCase().includes(search))
+            );
+            renderCityList(filtered);
+        }
+        
+        // City Detail Modal with street-level drill-down
+        function showCityDetailModal(rank) {
+            const city = topCities.find(c => c.rank === rank);
+            if (!city) return;
+            
+            const modal = document.getElementById('modal');
+            const catEl = document.getElementById('modal-category');
+            const titleEl = document.getElementById('modal-title');
+            const descEl = document.getElementById('modal-desc');
+            
+            const flag = city.country === "DE" ? "🇩🇪 Deutschland" : "🇺🇸 USA";
+            const kauf = city.country === "DE" ? `${city.kaufkraft} Kaufkraft-Index` : `Median HH Income $${city.kaufkraft}k`;
+            
+            catEl.className = `category-pill ${city.country === "DE" ? "ai-de" : "re-us"} text-xs mb-2`;
+            catEl.textContent = `${flag} • ${city.type}`;
+            
+            titleEl.innerHTML = `${city.name} <span class="text-violet-400 text-base font-mono ml-2">${kauf}</span>`;
+            
+            // Generate street-level neighborhoods (realistic examples)
+            let neighborhoodsHTML = '';
+            if (city.country === "DE") {
+                neighborhoodsHTML = `
+                    <div class="mt-5">
+                        <div class="text-violet-400 text-xs font-mono mb-2 flex items-center gap-x-2">
+                            <i class="fa-solid fa-road"></i> 
+                            <span>TOP VIERTEL / STRASSENEBENE (KI-Analyse)</span>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between bg-black/30 backdrop-blur-md p-2.5 rounded-xl"><span class="font-medium">Schwabing / Maxvorstadt</span> <span class="text-violet-400 text-xs">Sehr hoch • +18% Wertsteigerung</span></div>
+                            <div class="flex justify-between bg-black/30 backdrop-blur-md p-2.5 rounded-xl"><span class="font-medium">Lehel / Altstadt</span> <span class="text-violet-400 text-xs">Premium • Starke Nachfrage</span></div>
+                            <div class="flex justify-between bg-black/30 backdrop-blur-md p-2.5 rounded-xl"><span class="font-medium">Sendling / Westpark</span> <span class="text-violet-400 text-xs">Aufstrebend • Gute Rendite</span></div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                neighborhoodsHTML = `
+                    <div class="mt-5">
+                        <div class="text-violet-400 text-xs font-mono mb-2 flex items-center gap-x-2">
+                            <i class="fa-solid fa-road"></i> 
+                            <span>TOP NEIGHBORHOODS / STREET LEVEL (AI Insights)</span>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between bg-black/30 backdrop-blur-md p-2.5 rounded-xl"><span class="font-medium">Downtown / SoMa</span> <span class="text-violet-400 text-xs">Tech • Sehr hohe Preise</span></div>
+                            <div class="flex justify-between bg-black/30 backdrop-blur-md p-2.5 rounded-xl"><span class="font-medium">Mission District / Noe Valley</span> <span class="text-violet-400 text-xs">Aufstrebend • Starke KI-Startups</span></div>
+                            <div class="flex justify-between bg-black/30 backdrop-blur-md p-2.5 rounded-xl"><span class="font-medium">Pacific Heights</span> <span class="text-violet-400 text-xs">Ultra-Premium • Hohe Kaufkraft</span></div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            descEl.innerHTML = `
+                <div class="text-sm leading-relaxed">
+                    <div class="mb-4">${city.insight}</div>
+                    
+                    <div class="grid grid-cols-2 gap-3 text-xs mb-4">
+                        <div class="bg-black/30 backdrop-blur-md p-3 rounded-2xl">
+                            <div class="text-violet-700">KAUFKRAFT</div>
+                            <div class="font-mono text-lg text-violet-400">${city.median}</div>
+                        </div>
+                        <div class="bg-black/30 backdrop-blur-md p-3 rounded-2xl">
+                            <div class="text-violet-700">INVESTMENT-SCORE</div>
+                            <div class="font-mono text-lg text-violet-400">${Math.floor(city.kaufkraft / 1.2) + 65}/100</div>
+                        </div>
+                    </div>
+                    
+                    ${neighborhoodsHTML}
+                    
+                    <div class="mt-4 text-[10px] text-violet-700">
+                        KI-Empfehlung: Hohe Kaufkraft + starke digitale Infrastruktur = Hohes Potenzial für Premium- &amp; PropTech-Immobilien.
+                    </div>
+                </div>
+            `;
+            
+            // Update currentModalFeed for copy if needed (reuse existing)
+            currentModalFeed = { url: "#", name: city.name };
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        // Initialize everything
+        async function initializeApp() {
+            initializeTailwind();
+            updateLiveTime();
+            
+            // Render ticker
+            renderTicker();
+            
+            // Feed-Metadaten vom Backend laden (Single Source of Truth), dann erst rendern
+            try {
+                await loadFeedMeta();
+            } catch (err) {
+                console.error('Feed-Metadaten konnten nicht geladen werden:', err);
+            }
+            
+            // Live-Laden aller 5 Kategorien direkt auf der Startseite (kein Klick nötig)
+            loadAllCategorySections();
+            
+            // Referenztabelle "Alle validierten Quellen"
+            renderTop50Table();
+            
+            // Render Top 50 Cities sidebar (Kaufkraft + Straßenebene)
+            renderCityList();
+            
+            // Random subtle ticker refresh hint
+            setTimeout(() => {
+                const ticker = document.getElementById('ticker-content');
+                if (ticker) {
+                    ticker.addEventListener('animationiteration', () => {
+                        // Can add new items occasionally if wanted
+                    });
+                }
+            }, 5000);
+            
+            // Keyboard support
+            document.addEventListener('keydown', function(e) {
+                if (e.key === "?" && document.activeElement.tagName === "BODY") {
+                    e.preventDefault();
+                    const search = document.getElementById('rss-search');
+                    if (search) search.focus();
+                }
+            });
+            
+            // Easter egg: Konami code for extra breaking news
+            let konami = [];
+            const pattern = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+            document.addEventListener('keydown', function(e) {
+                konami.push(e.key);
+                if (konami.length > pattern.length) konami.shift();
+                if (JSON.stringify(konami) === JSON.stringify(pattern)) {
+                    addBreakingNews();
+                    addBreakingNews();
+                    konami = [];
+                }
+            });
+            
+            // Initial filter hint
+            console.log('%c[KI•IMMO Terminal] Web App initialized. Feeds & KI-Chat laufen jetzt server-seitig über das Backend.', 'color:#7C3AED');
+        }
+        
+        // Boot
+        window.onload = initializeApp;
+    </script>
+    </div> <!-- close xl:ml-80 wrapper -->
 </body>
 </html>

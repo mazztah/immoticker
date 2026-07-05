@@ -21,4 +21,6 @@ COPY --chown=user:user . .
 
 EXPOSE 8080
 
+# Cloud Run setzt $PORT automatisch (Standard 8080) — Secrets (GROQ_API_KEY etc.)
+# werden NICHT hier hineingebacken, sondern zur Laufzeit als Env-Vars/Secrets injiziert.
 CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --log-level info"]
