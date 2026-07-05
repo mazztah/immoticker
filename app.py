@@ -15,8 +15,10 @@ import os
 import re
 import time
 import json
+import queue
 import asyncio
 import logging
+import threading
 from collections import defaultdict
 from pathlib import Path
 from html import unescape
@@ -24,7 +26,7 @@ from html import unescape
 import httpx
 import feedparser
 from fastapi import FastAPI, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -43,6 +45,12 @@ logger = logging.getLogger("ki_immo_terminal")
 # ============================================================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("XAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+# Persona- & Profil-Links für den LinkedIn-Generator — bitte mit deinen echten URLs befüllen
+# (bewusst NICHT vom LLM generieren lassen, damit die Links garantiert korrekt sind).
+FILIP_LANDINGPAGE_URL = os.getenv("LANDINGPAGE_URL", "https://jhjjhdkulandhfdfdpagefjdsh-307619780865.europe-west3.run.app/")
+FILIP_LINKEDIN_URL = os.getenv("FILIP_LINKEDIN_URL", "https://www.linkedin.com/in/DEIN-LINKEDIN-PROFIL")  # TODO: eintragen
+FILIP_XING_URL = os.getenv("FILIP_XING_URL", "https://www.xing.com/profile/DEIN-XING-PROFIL")  # TODO: eintragen
 
 app = FastAPI(title="KI-Immo-Terminal")
 app.add_middleware(
@@ -64,6 +72,15 @@ async def index():
     if html_path.exists():
         return HTMLResponse(html_path.read_text(encoding="utf-8"))
     return HTMLResponse("<h1>Frontend nicht gefunden</h1>", status_code=404)
+
+
+@app.get("/api/profile-links")
+async def profile_links():
+    return {
+        "landingpage": FILIP_LANDINGPAGE_URL,
+        "linkedin": FILIP_LINKEDIN_URL,
+        "xing": FILIP_XING_URL,
+    }
 
 
 @app.get("/health")
@@ -473,23 +490,113 @@ async def chat(payload: ChatRequest):
 
 
 # ============================================================
-# LINKEDIN-ARTIKEL-GENERATOR (aus per Checkbox ausgewählten News)
+# LINKEDIN-ARTIKEL-GENERATOR (aus per Checkbox ausgewählten News) — mit Token-Streaming
 # ============================================================
-LINKEDIN_SYSTEM_PROMPT = """Du bist ein professioneller Ghostwriter für LinkedIn-Artikel im Bereich KI und \
-Immobilien. Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt, ohne Markdown-Codeblock, ohne Erklärtext davor \
-oder danach, exakt im Format:
-{"headline": "...", "body": "...", "hashtags": ["...", "..."]}
+LINKEDIN_SYSTEM_PROMPT = f"""Du bist ein professioneller Ghostwriter für LinkedIn-Artikel im Bereich KI und \
+Immobilien. Du schreibst im authentischen, persönlichen Stil von Filip Makarczyk – Hybrid-Experte mit über \
+13 Jahren Property-Management-Erfahrung, der seine eigenen produktionsreifen KI-Systeme (25+ Module) selbst \
+baut und betreibt.
+
+Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt, ohne Markdown-Codeblock, ohne Erklärtext davor oder \
+danach, exakt im Format:
+{{"headline": "...", "body": "...", "quote": "...", "hashtags": ["...", "..."], "keywords": ["...", "..."]}}
 
 Anforderungen:
-- headline: prägnanter, aufmerksamkeitsstarker Titel (max. 12 Wörter)
-- body: vollständiger LinkedIn-Artikel auf Deutsch, professionell aber persönlich, starker Hook im ersten Satz, \
-kurze Absätze (LinkedIn-Stil), entwickelt einen eigenen roten Faden statt die News nur aufzulisten, endet mit \
-Call-to-Action und einem "Quellen:"-Abschnitt mit den Original-Links.
-- hashtags: 4-6 relevante Hashtags ohne Raute-Symbol, als Array von Strings"""
+
+- headline: Prägnanter, aufmerksamkeitsstarker Titel (max. 12 Wörter), neugierig machend, mit klarem Nutzenversprechen.
+
+- body: Vollständiger LinkedIn-Artikel auf Deutsch, in Markdown-Light formatiert (**fett** für Zwischenüberschriften, \
+"- " für Aufzählungen, Leerzeile zwischen Absätzen). Struktur in klar erkennbare Abschnitte:
+  1. **Hook** — starker erster Satz + kurze Einordnung der ausgewählten News
+  2. **Was das für 2026 bedeutet** — Analyse der Implikationen für die Immobilienbranche (z.B. Revenue \
+Intelligence, Hyper-Personalization, gescheiterte KI-Projekte vermeiden)
+  3. **Praktische Benefits** — konkrete Effizienzgewinne als kurze Aufzählung (Reporting, Mieterkommunikation, \
+Due Diligence, Marketing etc.)
+  4. **Mein roter Faden** — persönliche Perspektive als Hybrid-Experte ("Genau deshalb habe ich in meinem \
+KI-Ökosystem…")
+  5. **Ausblick** — klare Handlungsempfehlung, dann ein natürlicher Call-to-Action mit dieser Landingpage: \
+{FILIP_LANDINGPAGE_URL}
+  Danach ein "**Quellen:**"-Abschnitt mit den Original-Links der ausgewählten News.
+  Kurze Absätze (LinkedIn-Stil), Emojis sparsam aber gezielt einsetzen. Entwickle einen eigenen roten Faden \
+statt die News nur aufzulisten. Nutze die Keywords organisch im Fließtext.
+
+- quote: EIN einzelner, einprägsamer Pull-Quote-Satz (max. 25 Wörter) aus/im Stil des Artikels, der als \
+optisch hervorgehobenes Zitat über dem Artikel angezeigt wird.
+
+- hashtags: MINDESTENS 22 relevante Hashtags (ohne #-Symbol) als Array. Gute Mischung aus breiten und \
+hoch-spezifischen Tags (z.B. KIImmobilien, PropTech2026, PropertyManagement, VoiceAI, \
+MultiAgentOrchestrierung, EUAIAct, NOI, SmartBuilding, RAG, TenantExperience, RealEstateTech, \
+DigitalTransformation, HybridExpert, AssetManagement, ProptechGermany, ImmobilienKI usw.).
+
+- keywords: MINDESTENS 22 aktuell relevante Keywords/Phrasen im Kontext des Artikels und der Themen KI + \
+Immobilien/Property Management 2026 als Array, z.B. KI-gestütztes Property Management, PropTech 2026, \
+Multi-Agent-Orchestrierung, Voice AI Immobilien, RAG-Wissenssysteme, Automatisiertes Reporting, Tenant Voice \
+Assistant, Effizienzsteigerung, NOI-Optimierung, Predictive Analytics, Digital Twin, Smart Building, EU AI Act, \
+Hyper-Personalization, Agentic AI, Workflow Automation, Data-Driven Property Operations, Generative AI \
+Marketing, Due Diligence Automation, Revenue Intelligence, Business Intelligence Real Estate, Property \
+Operations Optimization, Asset Management AI, Mieterkommunikation 24/7, Cloud Deployment Immobilien, \
+Hybrid-Experte KI Immobilien.
+
+Schreibe professionell, aber persönlich und praxisnah. Der Leser soll spüren, dass hier jemand schreibt, der \
+beide Welten wirklich versteht und selbst Systeme baut."""
 
 
 class LinkedInRequest(BaseModel):
     articles: list[dict]
+
+
+def _build_linkedin_messages(articles: list[dict]) -> list[dict]:
+    articles_text = "\n\n".join(
+        f'{i+1}. "{a.get("title","")}" — Quelle: {a.get("source","")} ({a.get("category","")})'
+        f'{", " + a["pubDate"] if a.get("pubDate") else ""}\n'
+        f'Beschreibung: {a.get("description") or "(keine Beschreibung verfügbar)"}\nLink: {a.get("link","")}'
+        for i, a in enumerate(articles)
+    )
+    return [
+        {"role": "system", "content": LINKEDIN_SYSTEM_PROMPT},
+        {"role": "user", "content": f"Erstelle einen LinkedIn-Artikel basierend auf diesen "
+                                    f"{len(articles)} ausgewählten News:\n\n{articles_text}"},
+    ]
+
+
+def _groq_stream_worker(messages: list[dict], model: str, max_tokens: int, temperature: float, out_q: "queue.Queue"):
+    """Läuft in einem eigenen Thread, damit der blockierende Groq-Stream-Iterator den Event-Loop nicht blockiert."""
+    try:
+        client = _get_groq_client()
+        stream = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+        )
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta.content
+            if delta:
+                out_q.put(delta)
+    except Exception as exc:
+        out_q.put(f"__ERROR__:{exc}")
+    finally:
+        out_q.put(None)  # Sentinel: Stream fertig
+
+
+async def _stream_groq(messages: list[dict], model: str, max_tokens: int = 2500, temperature: float = 0.7):
+    """Async-Generator, der Groq-Text-Chunks liefert, sobald sie eintreffen (echtes Token-Streaming)."""
+    out_q: "queue.Queue" = queue.Queue()
+    thread = threading.Thread(
+        target=_groq_stream_worker, args=(messages, model, max_tokens, temperature, out_q), daemon=True
+    )
+    thread.start()
+    loop = asyncio.get_event_loop()
+    while True:
+        chunk = await loop.run_in_executor(None, out_q.get)
+        if chunk is None:
+            break
+        if isinstance(chunk, str) and chunk.startswith("__ERROR__:"):
+            raise RuntimeError(chunk[len("__ERROR__:"):])
+        yield chunk
 
 
 @app.post("/api/linkedin")
@@ -499,39 +606,20 @@ async def generate_linkedin(payload: LinkedInRequest):
     if not GROQ_API_KEY:
         return JSONResponse({"error": "GROQ_API_KEY ist nicht konfiguriert."}, status_code=503)
 
-    articles_text = "\n\n".join(
-        f'{i+1}. "{a.get("title","")}" — Quelle: {a.get("source","")} ({a.get("category","")})'
-        f'{", " + a["pubDate"] if a.get("pubDate") else ""}\n'
-        f'Beschreibung: {a.get("description") or "(keine Beschreibung verfügbar)"}\nLink: {a.get("link","")}'
-        for i, a in enumerate(payload.articles)
-    )
+    messages = _build_linkedin_messages(payload.articles)
 
-    try:
-        client = _get_groq_client()
-        completion = await asyncio.to_thread(
-            client.chat.completions.create,
-            model=GROQ_MODEL_FALLBACK[0],
-            messages=[
-                {"role": "system", "content": LINKEDIN_SYSTEM_PROMPT},
-                {"role": "user", "content": f"Erstelle einen LinkedIn-Artikel basierend auf diesen "
-                                            f"{len(payload.articles)} ausgewählten News:\n\n{articles_text}"},
-            ],
-            temperature=0.7,
-            max_tokens=1500,
-            stream=False,
-        )
-        raw = (completion.choices[0].message.content or "").strip()
-        cleaned = re.sub(r"^```json\s*|^```\s*|```\s*$", "", raw, flags=re.IGNORECASE | re.MULTILINE).strip()
+    async def token_stream():
         try:
-            parsed = json.loads(cleaned)
-        except json.JSONDecodeError:
-            parsed = {"headline": "LinkedIn-Artikel", "body": raw, "hashtags": []}
-        return parsed
-    except Exception:
-        logger.exception("Fehler in /api/linkedin")
-        return JSONResponse({"error": "LinkedIn-Artikel konnte nicht generiert werden. Bitte erneut versuchen."}, status_code=500)
+            async for chunk in _stream_groq(messages, GROQ_MODEL_FALLBACK[0], max_tokens=2500, temperature=0.75):
+                yield chunk
+        except Exception as exc:
+            logger.exception("Fehler beim LinkedIn-Streaming")
+            yield f"\n__STREAM_ERROR__: {exc}"
+
+    return StreamingResponse(token_stream(), media_type="text/plain; charset=utf-8")
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+
