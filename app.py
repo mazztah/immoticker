@@ -74,12 +74,22 @@ async def index():
     return HTMLResponse("<h1>Frontend nicht gefunden</h1>", status_code=404)
 
 
+def _normalize_url(url: str) -> str:
+    """Ergänzt fehlendes https://, damit <a href> nie als relativer Pfad zur eigenen Domain interpretiert wird."""
+    url = (url or "").strip()
+    if not url:
+        return url
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        url = "https://" + url.lstrip("/")
+    return url
+
+
 @app.get("/api/profile-links")
 async def profile_links():
     return {
-        "landingpage": FILIP_LANDINGPAGE_URL,
-        "linkedin": FILIP_LINKEDIN_URL,
-        "xing": FILIP_XING_URL,
+        "landingpage": _normalize_url(FILIP_LANDINGPAGE_URL),
+        "linkedin": _normalize_url(FILIP_LINKEDIN_URL),
+        "xing": _normalize_url(FILIP_XING_URL),
     }
 
 
@@ -501,56 +511,59 @@ async def chat(payload: ChatRequest):
 # ============================================================
 # LINKEDIN-ARTIKEL-GENERATOR (aus per Checkbox ausgewählten News) — mit Token-Streaming
 # ============================================================
-LINKEDIN_SYSTEM_PROMPT = f"""Du bist ein professioneller Ghostwriter für LinkedIn-Artikel im Bereich KI und \
-Immobilien. Du schreibst im authentischen, persönlichen Stil von Filip Makarczyk – Hybrid-Experte mit über \
-13 Jahren Property-Management-Erfahrung, der seine eigenen produktionsreifen KI-Systeme (25+ Module) selbst \
-baut und betreibt.
+LINKEDIN_SYSTEM_PROMPT = f"""Du bist ein professioneller Ghostwriter für ausführliche LinkedIn-Artikel im \
+Bereich KI und Immobilien. Du schreibst im authentischen, persönlichen Stil von Filip Makarczyk – \
+Hybrid-Experte mit über 13 Jahren Property-Management-Erfahrung, der seine eigenen produktionsreifen \
+KI-Systeme (25+ Module) selbst baut und betreibt.
 
 Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt, ohne Markdown-Codeblock, ohne Erklärtext davor oder \
 danach, exakt im Format:
-{{"headline": "...", "body": "...", "quote": "...", "hashtags": ["...", "..."], "keywords": ["...", "..."]}}
+{{"headline": "...", "body": "...", "quote": "...", "keywords": ["...", "..."], "hashtags": ["...", "..."]}}
+
+WICHTIG — der Artikel soll ausführlich und substanziell sein, kein kurzer Recap. Ziel: ca. 500-700 Wörter im body.
 
 WICHTIG — Tiefe je nach Anzahl der ausgewählten News:
-- Wurde NUR EINE News ausgewählt: Schreibe einen ausführlichen Deep-Dive-Artikel NUR zu dieser einen News. \
-Fasse zuerst die News selbst gründlich und verständlich zusammen (worum geht es, was ist neu, wer ist \
-betroffen), bevor du deine Einordnung/Analyse dazu gibst. Der Leser soll den Kern der Meldung auch ohne den \
-Originalartikel gelesen zu haben, vollständig verstehen.
-- Wurden MEHRERE News ausgewählt: Fasse jede der News kurz inhaltlich zusammen (worum geht es jeweils) und \
-verbinde sie dann zu einem gemeinsamen, roten Faden — ein synthetisierender Artikel, der die Verbindung \
-zwischen den Ereignissen aufzeigt, statt sie isoliert nebeneinanderzustellen.
+- Wurde NUR EINE News ausgewählt: Schreibe einen ausführlichen Deep-Dive-Artikel NUR zu dieser einen News.
+- Wurden MEHRERE News ausgewählt: Fasse jede einzeln inhaltlich zusammen und verbinde sie dann zu einem \
+gemeinsamen roten Faden — ein synthetisierender Artikel, der die Verbindung zwischen den Ereignissen aufzeigt.
 
-Anforderungen:
+Der body folgt exakt dieser Struktur, als Markdown-Light (**fett** nur für Zwischenüberschriften, "- " für \
+Aufzählungen, Leerzeile zwischen Absätzen):
 
-- headline: Prägnanter, aufmerksamkeitsstarker Titel (max. 12 Wörter), neugierig machend, mit klarem Nutzenversprechen.
+  1. **Einleitungssatz** — ein bis zwei Sätze, die knapp umreißen, worum es in diesem Artikel geht (worauf \
+sich die ausgewählten News beziehen), und Neugier wecken.
 
-- body: Vollständiger LinkedIn-Artikel auf Deutsch, in Markdown-Light formatiert (**fett** ausschließlich für \
-Zwischenüberschriften, "- " am Zeilenanfang für Aufzählungen, Leerzeile zwischen Absätzen). Struktur in klar \
-erkennbare Abschnitte:
-  1. **Hook** — starker erster Satz, der Neugier weckt
-  2. **Worum es geht** — gründliche, verständliche Zusammenfassung der ausgewählten News (siehe Tiefe-Regel oben)
-  3. **Was das für 2026 bedeutet** — deine Einordnung/Analyse für die Immobilienbranche (z.B. Revenue \
-Intelligence, Hyper-Personalization, gescheiterte KI-Projekte vermeiden)
-  4. **Praktische Benefits** — konkrete Effizienzgewinne als kurze Aufzählung (Reporting, Mieterkommunikation, \
-Due Diligence, Marketing etc.)
-  5. **Mein roter Faden** — persönliche Perspektive als Hybrid-Experte ("Genau deshalb habe ich in meinem \
-KI-Ökosystem…")
-  6. **Ausblick** — klare Handlungsempfehlung als Abschluss (OHNE Links/URLs im Text — diese werden separat \
-nach dem Artikel angezeigt)
-  Danach ein "**Quellen:**"-Abschnitt, der ausschließlich die Original-Titel der ausgewählten News nennt \
-(ohne rohe URLs im Fließtext).
-  Kurze Absätze (LinkedIn-Stil), Emojis sparsam aber gezielt einsetzen. Nutze die Keywords organisch im Fließtext. \
-Verwende NIRGENDS HTML- oder CSS-Code, Klassennamen oder technische Formatierungsanweisungen im Text — nur \
-reinen, natürlichsprachlichen Artikeltext mit den beschriebenen Markdown-Light-Elementen.
+  2. **Die News im Überblick** — eine gründliche, eigenständige Zusammenfassung ALLER ausgewählten News: \
+was ist passiert, was ist neu, wer/was ist betroffen. Jede News wird inhaltlich korrekt und verständlich \
+wiedergegeben, sodass der Leser den Kern auch ohne die Originalartikel vollständig versteht. Bei mehreren \
+News: jede einzeln zusammenfassen, bevor der rote Faden gezogen wird.
+
+  3. **Was das für die Praxis bedeutet** — DER EIGENTLICHE LINKEDIN-ARTIKEL: hier informierst du den Leser \
+ausführlich über die Bedeutung dieser Neuigkeiten für 2026 und die Immobilien-/PropTech-Branche (z.B. Revenue \
+Intelligence, Hyper-Personalization, gescheiterte KI-Projekte vermeiden), gefolgt von konkreten praktischen \
+Benefits als Aufzählung (Reporting, Mieterkommunikation, Due Diligence, Marketing, Effizienz etc.).
+
+  4. **Mein Blick als Hybrid-Experte** — dein persönlicher Bezug: wie ordnest DU das ein, was bedeutet das \
+für deine eigene Arbeit mit deinem KI-Ökosystem, welche Erfahrung/Haltung bringst du ein ("Genau deshalb \
+habe ich in meinem KI-Ökosystem…").
+
+  5. **Ausblick** — klare, motivierende Abschluss-Botschaft/Handlungsempfehlung (OHNE Links/URLs im Text — \
+diese werden separat direkt nach dem Artikel als Buttons angezeigt, nicht im Fließtext).
+
+  Danach ein "**Quellen:**"-Abschnitt, der die Original-Titel der ausgewählten News nennt (ohne rohe URLs \
+im Fließtext). Kurze, LinkedIn-taugliche Absätze, Emojis sparsam aber gezielt. Verwende NIRGENDS HTML- oder \
+CSS-Code, Klassennamen oder technische Formatierungsanweisungen im Text — nur reinen, natürlichsprachlichen \
+Artikeltext mit den beschriebenen Markdown-Light-Elementen.
 
 - quote: EIN einzelner, einprägsamer Pull-Quote-Satz (max. 25 Wörter) aus/im Stil des Artikels, der als \
 optisch hervorgehobenes Zitat über dem Artikel angezeigt wird.
 
-- hashtags: MINDESTENS 22 relevante Hashtags (ohne #-Symbol) als Array, thematisch passend zu genau diesen \
-ausgewählten News (nicht generisch) — gute Mischung aus breiten und hoch-spezifischen Tags.
+- keywords: GENAU 25 aktuell relevante Keywords/Phrasen als Array, konkret im Kontext der News-Zusammenfassung \
+und des Artikels (nicht generisch) — Fachbegriffe, Firmennamen, Technologien oder Trends, die im Artikel \
+vorkommen oder eng damit zusammenhängen.
 
-- keywords: MINDESTENS 22 aktuell relevante Keywords/Phrasen als Array, die konkret im Kontext dieser \
-ausgewählten News und des geschriebenen Artikels stehen (nicht generisch) — z.B. Fachbegriffe, Firmennamen, \
-Technologien oder Trends, die im Artikel vorkommen oder eng damit zusammenhängen.
+- hashtags: MINDESTENS 22 relevante Hashtags (ohne #-Symbol) als Array, thematisch passend zur \
+News-Zusammenfassung und zum Artikel (nicht generisch) — gute Mischung aus breiten und hoch-spezifischen Tags.
 
 Schreibe professionell, aber persönlich und praxisnah. Der Leser soll spüren, dass hier jemand schreibt, der \
 beide Welten wirklich versteht und selbst Systeme baut."""
@@ -638,7 +651,7 @@ async def generate_linkedin(payload: LinkedInRequest):
 
     async def token_stream():
         try:
-            async for chunk in _stream_groq(messages, GROQ_MODEL_FALLBACK[0], max_tokens=2500, temperature=0.75):
+            async for chunk in _stream_groq(messages, GROQ_MODEL_FALLBACK[0], max_tokens=3000, temperature=0.75):
                 yield chunk
         except Exception as exc:
             logger.exception("Fehler beim LinkedIn-Streaming")
@@ -650,4 +663,3 @@ async def generate_linkedin(payload: LinkedInRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
-
