@@ -246,6 +246,15 @@ FEEDS = [
     {"id": 152, "name": "Project Syndicate", "url": "https://www.project-syndicate.org/rss", "cat": "Top Magazine", "desc": "Meinungsbeiträge von Ökonomen & Politikern weltweit"},
     {"id": 153, "name": "Conversable Economist", "url": "https://conversableeconomist.com/feed/", "cat": "Top Magazine", "desc": "Wirtschaftsanalyse (Journal of Economic Perspectives)"},
     {"id": 154, "name": "Naked Capitalism", "url": "https://www.nakedcapitalism.com/feed", "cat": "Top Magazine", "desc": "Kritische Finanz- & Wirtschaftskommentare"},
+    {"id": 155, "name": "Sebastian Raschka Magazine", "url": "https://magazine.sebastianraschka.com/feed", "cat": "KI USA", "desc": "Einflussreicher ML-Researcher & Autor, tiefgehende LLM-Analysen"},
+    {"id": 156, "name": "The Gradient", "url": "https://thegradient.pub/rss/", "cat": "KI USA", "desc": "Unabhängiges KI-Fachmagazin (Ghost-Plattform)"},
+    {"id": 157, "name": "Last Week in AI", "url": "https://lastweekin.ai/feed", "cat": "KI USA", "desc": "Wöchentlicher kuratierter KI-News-Podcast/Newsletter"},
+    {"id": 158, "name": "NVIDIA Blog", "url": "https://feeds.feedburner.com/nvidiablog", "cat": "KI USA", "desc": "Offizieller NVIDIA-Blog (GPU/KI-Infrastruktur)"},
+    {"id": 159, "name": "Google AI Blog", "url": "https://blog.google/technology/ai/rss/", "cat": "KI USA", "desc": "Offizieller Google-KI-Blog"},
+    {"id": 160, "name": "Jina AI Blog", "url": "https://jina.ai/feed.rss", "cat": "KI USA", "desc": "Such-/Embedding-KI-Anbieter, technische Deep-Dives"},
+    {"id": 161, "name": "Silicon Canals", "url": "https://siliconcanals.com/feed/", "cat": "KI USA", "desc": "Europäisches Tech-/Startup-News-Portal"},
+    {"id": 162, "name": "ConnectCRE", "url": "https://www.connectcre.com/feed", "cat": "Immobilien USA", "desc": "Commercial-Real-Estate-News (regional & national)"},
+    {"id": 163, "name": "ComputerWeekly – Aktuelle IT-News", "url": "https://www.computerweekly.com/rss/Latest-IT-news.xml", "cat": "KI USA", "desc": "Britisches IT-Fachmedium (korrigierte Feed-URL)"},
 ]
 
 FEED_COUNTS = defaultdict(int)
@@ -501,41 +510,47 @@ Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt, ohne Markdown-Codeblock,
 danach, exakt im Format:
 {{"headline": "...", "body": "...", "quote": "...", "hashtags": ["...", "..."], "keywords": ["...", "..."]}}
 
+WICHTIG — Tiefe je nach Anzahl der ausgewählten News:
+- Wurde NUR EINE News ausgewählt: Schreibe einen ausführlichen Deep-Dive-Artikel NUR zu dieser einen News. \
+Fasse zuerst die News selbst gründlich und verständlich zusammen (worum geht es, was ist neu, wer ist \
+betroffen), bevor du deine Einordnung/Analyse dazu gibst. Der Leser soll den Kern der Meldung auch ohne den \
+Originalartikel gelesen zu haben, vollständig verstehen.
+- Wurden MEHRERE News ausgewählt: Fasse jede der News kurz inhaltlich zusammen (worum geht es jeweils) und \
+verbinde sie dann zu einem gemeinsamen, roten Faden — ein synthetisierender Artikel, der die Verbindung \
+zwischen den Ereignissen aufzeigt, statt sie isoliert nebeneinanderzustellen.
+
 Anforderungen:
 
 - headline: Prägnanter, aufmerksamkeitsstarker Titel (max. 12 Wörter), neugierig machend, mit klarem Nutzenversprechen.
 
-- body: Vollständiger LinkedIn-Artikel auf Deutsch, in Markdown-Light formatiert (**fett** für Zwischenüberschriften, \
-"- " für Aufzählungen, Leerzeile zwischen Absätzen). Struktur in klar erkennbare Abschnitte:
-  1. **Hook** — starker erster Satz + kurze Einordnung der ausgewählten News
-  2. **Was das für 2026 bedeutet** — Analyse der Implikationen für die Immobilienbranche (z.B. Revenue \
+- body: Vollständiger LinkedIn-Artikel auf Deutsch, in Markdown-Light formatiert (**fett** ausschließlich für \
+Zwischenüberschriften, "- " am Zeilenanfang für Aufzählungen, Leerzeile zwischen Absätzen). Struktur in klar \
+erkennbare Abschnitte:
+  1. **Hook** — starker erster Satz, der Neugier weckt
+  2. **Worum es geht** — gründliche, verständliche Zusammenfassung der ausgewählten News (siehe Tiefe-Regel oben)
+  3. **Was das für 2026 bedeutet** — deine Einordnung/Analyse für die Immobilienbranche (z.B. Revenue \
 Intelligence, Hyper-Personalization, gescheiterte KI-Projekte vermeiden)
-  3. **Praktische Benefits** — konkrete Effizienzgewinne als kurze Aufzählung (Reporting, Mieterkommunikation, \
+  4. **Praktische Benefits** — konkrete Effizienzgewinne als kurze Aufzählung (Reporting, Mieterkommunikation, \
 Due Diligence, Marketing etc.)
-  4. **Mein roter Faden** — persönliche Perspektive als Hybrid-Experte ("Genau deshalb habe ich in meinem \
+  5. **Mein roter Faden** — persönliche Perspektive als Hybrid-Experte ("Genau deshalb habe ich in meinem \
 KI-Ökosystem…")
-  5. **Ausblick** — klare Handlungsempfehlung, dann ein natürlicher Call-to-Action mit dieser Landingpage: \
-{FILIP_LANDINGPAGE_URL}
-  Danach ein "**Quellen:**"-Abschnitt mit den Original-Links der ausgewählten News.
-  Kurze Absätze (LinkedIn-Stil), Emojis sparsam aber gezielt einsetzen. Entwickle einen eigenen roten Faden \
-statt die News nur aufzulisten. Nutze die Keywords organisch im Fließtext.
+  6. **Ausblick** — klare Handlungsempfehlung als Abschluss (OHNE Links/URLs im Text — diese werden separat \
+nach dem Artikel angezeigt)
+  Danach ein "**Quellen:**"-Abschnitt, der ausschließlich die Original-Titel der ausgewählten News nennt \
+(ohne rohe URLs im Fließtext).
+  Kurze Absätze (LinkedIn-Stil), Emojis sparsam aber gezielt einsetzen. Nutze die Keywords organisch im Fließtext. \
+Verwende NIRGENDS HTML- oder CSS-Code, Klassennamen oder technische Formatierungsanweisungen im Text — nur \
+reinen, natürlichsprachlichen Artikeltext mit den beschriebenen Markdown-Light-Elementen.
 
 - quote: EIN einzelner, einprägsamer Pull-Quote-Satz (max. 25 Wörter) aus/im Stil des Artikels, der als \
 optisch hervorgehobenes Zitat über dem Artikel angezeigt wird.
 
-- hashtags: MINDESTENS 22 relevante Hashtags (ohne #-Symbol) als Array. Gute Mischung aus breiten und \
-hoch-spezifischen Tags (z.B. KIImmobilien, PropTech2026, PropertyManagement, VoiceAI, \
-MultiAgentOrchestrierung, EUAIAct, NOI, SmartBuilding, RAG, TenantExperience, RealEstateTech, \
-DigitalTransformation, HybridExpert, AssetManagement, ProptechGermany, ImmobilienKI usw.).
+- hashtags: MINDESTENS 22 relevante Hashtags (ohne #-Symbol) als Array, thematisch passend zu genau diesen \
+ausgewählten News (nicht generisch) — gute Mischung aus breiten und hoch-spezifischen Tags.
 
-- keywords: MINDESTENS 22 aktuell relevante Keywords/Phrasen im Kontext des Artikels und der Themen KI + \
-Immobilien/Property Management 2026 als Array, z.B. KI-gestütztes Property Management, PropTech 2026, \
-Multi-Agent-Orchestrierung, Voice AI Immobilien, RAG-Wissenssysteme, Automatisiertes Reporting, Tenant Voice \
-Assistant, Effizienzsteigerung, NOI-Optimierung, Predictive Analytics, Digital Twin, Smart Building, EU AI Act, \
-Hyper-Personalization, Agentic AI, Workflow Automation, Data-Driven Property Operations, Generative AI \
-Marketing, Due Diligence Automation, Revenue Intelligence, Business Intelligence Real Estate, Property \
-Operations Optimization, Asset Management AI, Mieterkommunikation 24/7, Cloud Deployment Immobilien, \
-Hybrid-Experte KI Immobilien.
+- keywords: MINDESTENS 22 aktuell relevante Keywords/Phrasen als Array, die konkret im Kontext dieser \
+ausgewählten News und des geschriebenen Artikels stehen (nicht generisch) — z.B. Fachbegriffe, Firmennamen, \
+Technologien oder Trends, die im Artikel vorkommen oder eng damit zusammenhängen.
 
 Schreibe professionell, aber persönlich und praxisnah. Der Leser soll spüren, dass hier jemand schreibt, der \
 beide Welten wirklich versteht und selbst Systeme baut."""

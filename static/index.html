@@ -251,7 +251,7 @@
                     <a href="#re-de" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Immobilien DE</a>
                     <a href="#top50" class="px-5 py-2 bg-violet-600 hover:bg-violet-500 transition-all text-white rounded-2xl font-semibold flex items-center gap-x-2 text-sm">
                         <i class="fa-solid fa-rss"></i>
-                        <span>Alle 154 RSS</span>
+                        <span>Alle 163 RSS</span>
                     </a>
                 </div>
                 
@@ -334,7 +334,7 @@
                 </div>
                 
                 <div class="flex justify-between items-center mt-3 px-2 text-[10px] text-violet-700 font-mono">
-                    <div>SCROLLING INTELLIGENCE • 154 VALIDIERTE QUELLEN • PAUSE ON HOVER</div>
+                    <div>SCROLLING INTELLIGENCE • 163 VALIDIERTE QUELLEN • PAUSE ON HOVER</div>
                     <div class="flex items-center gap-x-4">
                         <button onclick="addBreakingNews()" 
                                 class="flex items-center gap-x-1.5 hover:text-violet-400 transition-colors">
@@ -555,7 +555,7 @@
                 <div>
                     <div class="flex items-center gap-x-3">
                         <i class="fa-solid fa-list-check text-violet-400 text-3xl"></i>
-                        <h2 class="text-5xl font-display tracking-tighter">Alle 154 validierten Quellen</h2>
+                        <h2 class="text-5xl font-display tracking-tighter">Alle 163 validierten Quellen</h2>
                     </div>
                     <p class="mt-3 text-lg text-zinc-400">Ausschließlich Quellen mit einem tatsächlich existierenden, funktionierenden RSS-Feed — geprüft im Juli 2026. Firmen &amp; Investoren ohne eigenen RSS-Feed (das betrifft die meisten Private-Equity-Häuser) sind bewusst <span class="font-semibold text-violet-400">nicht</span> aufgeführt.</p>
                 </div>
@@ -564,7 +564,7 @@
                     <button onclick="copyAllRSS()" 
                             class="px-8 py-3.5 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 transition-all text-white rounded-2xl font-semibold flex items-center justify-center gap-x-3 shadow-lg shadow-violet-950">
                         <i class="fa-solid fa-copy"></i>
-                        <span>ALLE 154 LINKS KOPIEREN</span>
+                        <span>ALLE 163 LINKS KOPIEREN</span>
                     </button>
                 </div>
             </div>
@@ -605,7 +605,7 @@
             </div>
             
             <div class="mt-4 text-center text-xs text-zinc-500">
-                Alle 154 Links wurden im Juli 2026 direkt abgerufen und auf ein echtes RSS/Atom-Format geprüft. Anthropic ist als Community-Mirror gekennzeichnet, da der Hersteller selbst keinen offiziellen RSS-Feed anbietet. Das Fetchen läuft jetzt server-seitig im Backend statt über Browser-CORS-Proxies — dadurch deutlich zuverlässiger.
+                Alle 163 Links wurden im Juli 2026 direkt abgerufen und auf ein echtes RSS/Atom-Format geprüft. Anthropic ist als Community-Mirror gekennzeichnet, da der Hersteller selbst keinen offiziellen RSS-Feed anbietet. Das Fetchen läuft jetzt server-seitig im Backend statt über Browser-CORS-Proxies — dadurch deutlich zuverlässiger.
             </div>
         </div>
     </div>
@@ -1230,15 +1230,18 @@
             wrapper.classList.remove('hidden');
             wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             card.innerHTML = `
-                <div class="text-xs text-zinc-400 mb-2 flex items-center gap-x-2">
-                    <i class="fa-solid fa-bolt text-violet-500"></i> Generiere live (Streaming)...
+                <div class="flex flex-col items-center justify-center py-14 text-violet-300">
+                    <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-4"></i>
+                    <div class="text-sm font-medium" id="linkedin-loading-label">Artikel wird verfasst...</div>
+                    <div class="text-xs text-zinc-500 mt-1">Analysiert ${selectedLinks.size} ausgewählte News</div>
                 </div>
-                <pre id="linkedin-stream-raw" class="whitespace-pre-wrap font-mono text-xs text-zinc-700 leading-relaxed"></pre>
             `;
             
             const selectedArticles = Array.from(selectedLinks).map(link => articleRegistry[link]).filter(Boolean);
-            const streamEl = document.getElementById('linkedin-stream-raw');
             let buffer = '';
+            let lastLabelUpdate = 0;
+            // Dezente, sich abwechselnde Status-Texte statt Rohtext/JSON während des Streamings
+            const stages = ['Analysiere ausgewählte News...', 'Entwickle roten Faden...', 'Formuliere Artikel...', 'Feile an Hashtags & Keywords...'];
             
             try {
                 const response = await fetch('/api/linkedin', {
@@ -1257,9 +1260,13 @@
                     const { done, value } = await reader.read();
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
-                    if (streamEl) {
-                        streamEl.textContent = buffer;
-                        streamEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    // Statt rohem JSON/Code nur einen dezenten Fortschritts-Status zeigen
+                    const now = Date.now();
+                    if (now - lastLabelUpdate > 1400) {
+                        const stageIdx = Math.min(stages.length - 1, Math.floor(buffer.length / 300));
+                        const label = document.getElementById('linkedin-loading-label');
+                        if (label) label.textContent = stages[stageIdx];
+                        lastLabelUpdate = now;
                     }
                 }
                 
@@ -1276,7 +1283,7 @@
                 }
                 renderLinkedInPreview(parsed);
             } catch (err) {
-                card.innerHTML = `<div class="text-center py-10 text-red-500 text-sm">
+                card.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">
                     <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><br>${escapeHtml(err.message)}
                 </div>`;
             }
@@ -1284,16 +1291,21 @@
         
         let lastLinkedInArticle = null;
         
-        // Leichtes Markdown (fett, Aufzählungen, Absätze) in HTML für die Vorschau umwandeln
+        // Leichtes Markdown (fett, Aufzählungen, Absätze) in HTML für die Vorschau umwandeln —
+        // entfernt dabei zuverlässig jegliche rohen Markdown-/Code-Reste, damit nie "**" o.ä. sichtbar bleibt.
         function formatLinkedInBody(text) {
-            const paragraphs = (text || '').split(/\n\s*\n/);
+            let cleaned = (text || '')
+                .replace(/```[a-z]*\n?/gi, '')   // versehentliche Codeblock-Marker entfernen
+                .replace(/<\/?[a-z][^>]*>/gi, ''); // versehentliche HTML-Tags entfernen (nur reiner Text soll bleiben)
+            
+            const paragraphs = cleaned.split(/\n\s*\n/);
             return paragraphs.map(p => {
                 const trimmed = p.trim();
                 if (!trimmed) return '';
                 const bulletLines = trimmed.split('\n').filter(l => /^[-•]\s+/.test(l.trim()));
                 if (bulletLines.length > 0 && bulletLines.length === trimmed.split('\n').length) {
                     const items = bulletLines.map(l => `<li>${inlineMd(l.replace(/^[-•]\s+/, ''))}</li>`).join('');
-                    return `<ul class="list-disc list-inside space-y-1 my-2">${items}</ul>`;
+                    return `<ul class="list-disc list-inside space-y-1 my-2 marker:text-violet-400">${items}</ul>`;
                 }
                 return `<p class="mb-3">${trimmed.split('\n').map(inlineMd).join('<br>')}</p>`;
             }).join('');
@@ -1301,8 +1313,8 @@
         
         function inlineMd(line) {
             let html = escapeHtml(line);
-            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-            html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" class="text-blue-600 underline">$1</a>');
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="text-violet-200 font-semibold">$1</strong>');
+            html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" class="text-violet-300 underline">$1</a>');
             return html;
         }
         
@@ -1311,50 +1323,51 @@
             const card = document.getElementById('linkedin-preview-card');
             const bodyHtml = formatLinkedInBody(article.body || '');
             const hashtagsHtml = (article.hashtags || []).map(h => 
-                `<span class="text-blue-600 font-medium mr-2">#${h.replace(/^#/, '').replace(/\s+/g, '')}</span>`
+                `<span class="text-violet-300 font-medium mr-2">#${h.replace(/^#/, '').replace(/\s+/g, '')}</span>`
             ).join('');
             const keywordsHtml = (article.keywords || []).map(k => 
-                `<span class="inline-block bg-zinc-100 text-zinc-600 text-[11px] rounded-full px-2 py-0.5 mr-1 mb-1">${escapeHtml(k)}</span>`
+                `<span class="inline-block bg-white/10 text-zinc-300 text-[11px] rounded-full px-2 py-0.5 mr-1 mb-1">${escapeHtml(k)}</span>`
             ).join('');
             
             card.innerHTML = `
-                <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-zinc-200">
+                <div class="flex items-center gap-x-3 mb-4 pb-4 border-b border-white/10">
                     <div class="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg">FM</div>
                     <div>
-                        <div class="font-semibold text-zinc-900">Filip Makarczyk</div>
+                        <div class="font-semibold text-zinc-100">Filip Makarczyk</div>
                         <div class="text-xs text-zinc-500">Hybrid Property Management &amp; KI-Experte · Jetzt · <i class="fa-solid fa-earth-americas"></i></div>
                     </div>
                 </div>
-                <h3 class="text-xl font-bold text-zinc-900 mb-3">${escapeHtml(article.headline || '')}</h3>
+                <h3 class="text-xl font-display font-bold text-zinc-100 mb-3">${escapeHtml(article.headline || '')}</h3>
                 ${article.quote ? `
-                    <blockquote class="border-l-4 border-violet-500 bg-violet-50 text-violet-900 italic text-sm px-4 py-3 mb-4 rounded-r-lg">
+                    <blockquote class="border-l-4 border-violet-500 bg-violet-500/10 text-violet-200 italic text-sm px-4 py-3 mb-4 rounded-r-lg">
                         "${escapeHtml(article.quote)}"
                     </blockquote>
                 ` : ''}
-                <div class="text-sm text-zinc-800 leading-relaxed mb-4">${bodyHtml}</div>
-                ${hashtagsHtml ? `<div class="text-sm mb-3">${hashtagsHtml}</div>` : ''}
-                ${keywordsHtml ? `
-                    <div class="text-xs text-zinc-400 mb-2">Keywords:</div>
-                    <div class="mb-4">${keywordsHtml}</div>
-                ` : ''}
+                <div class="text-sm text-zinc-300 leading-relaxed mb-5">${bodyHtml}</div>
                 
-                <!-- PROMINENTE PROFIL-LINKS -->
-                <div class="mt-5 pt-4 border-t border-zinc-200 flex flex-wrap gap-2">
+                <!-- PROMINENTE PROFIL-LINKS — direkt nach dem Artikeltext, vor Hashtags/Keywords -->
+                <div class="flex flex-wrap gap-2 pb-5 mb-5 border-b border-white/10">
                     <a href="${profileLinks.landingpage}" target="_blank" 
-                       class="flex items-center gap-x-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-xl transition-colors">
+                       class="flex items-center gap-x-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl transition-colors">
                         <i class="fa-solid fa-rocket"></i> Live-Demo &amp; Pilotgespräch
                     </a>
                     <a href="${profileLinks.linkedin}" target="_blank" 
                        class="flex items-center gap-x-2 px-4 py-2 bg-[#0A66C2] hover:opacity-90 text-white text-xs font-semibold rounded-xl transition-colors">
                         <i class="fa-brands fa-linkedin"></i> LinkedIn-Profil
                     </a>
-                    <a href="${profileLinks.xing} " target="_blank" 
+                    <a href="${profileLinks.xing}" target="_blank" 
                        class="flex items-center gap-x-2 px-4 py-2 bg-[#026466] hover:opacity-90 text-white text-xs font-semibold rounded-xl transition-colors">
                         <i class="fa-brands fa-xing"></i> Xing-Profil
                     </a>
                 </div>
                 
-                <div class="flex items-center justify-between mt-5 pt-3 border-t border-zinc-200 text-zinc-400 text-xs">
+                ${hashtagsHtml ? `<div class="text-sm mb-3 leading-relaxed">${hashtagsHtml}</div>` : ''}
+                ${keywordsHtml ? `
+                    <div class="text-xs text-zinc-500 mb-2">Keywords:</div>
+                    <div class="mb-2">${keywordsHtml}</div>
+                ` : ''}
+                
+                <div class="flex items-center justify-between mt-5 pt-3 border-t border-white/10 text-zinc-500 text-xs">
                     <span><i class="fa-solid fa-thumbs-up"></i> Gefällt mir</span>
                     <span><i class="fa-solid fa-comment"></i> Kommentieren</span>
                     <span><i class="fa-solid fa-share"></i> Teilen</span>
