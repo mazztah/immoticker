@@ -443,7 +443,7 @@
                 <i class="fa-brands fa-linkedin text-blue-500 text-2xl"></i>
                 <h3 class="text-2xl font-bold">LinkedIn-Vorschau</h3>
             </div>
-            <div id="linkedin-preview-card" class="bg-white text-zinc-900 rounded-2xl p-6 max-w-2xl mx-auto shadow-2xl">
+            <div id="linkedin-preview-card" class="bg-white/[0.06] backdrop-blur-xl border border-white/10 text-zinc-100 rounded-2xl p-6 max-w-2xl mx-auto shadow-2xl">
                 <!-- JS-generated -->
             </div>
             <div class="flex justify-center gap-x-3 mt-4">
@@ -1219,6 +1219,37 @@
             }
         }
         
+        // Repariert rohe Zeilenumbrüche/Tabs innerhalb von JSON-String-Werten, die manche LLMs
+        // (unzulässig) unescaped lassen, sodass JSON.parse sonst scheitern würde.
+        function sanitizeJsonNewlines(raw) {
+            let result = '';
+            let inString = false;
+            let escapeNext = false;
+            for (let i = 0; i < raw.length; i++) {
+                const ch = raw[i];
+                if (escapeNext) {
+                    result += ch;
+                    escapeNext = false;
+                    continue;
+                }
+                if (ch === '\\') {
+                    result += ch;
+                    escapeNext = true;
+                    continue;
+                }
+                if (ch === '"') {
+                    inString = !inString;
+                    result += ch;
+                    continue;
+                }
+                if (inString && ch === '\n') { result += '\\n'; continue; }
+                if (inString && ch === '\r') { continue; }
+                if (inString && ch === '\t') { result += '\\t'; continue; }
+                result += ch;
+            }
+            return result;
+        }
+        
         async function generateLinkedInArticle() {
             if (selectedLinks.size === 0) {
                 appendChatMessage('error', 'Bitte zuerst mindestens eine News per Checkbox auswählen.');
@@ -1279,7 +1310,13 @@
                 try {
                     parsed = JSON.parse(cleaned);
                 } catch (parseErr) {
-                    parsed = { headline: "LinkedIn-Artikel", body: buffer, hashtags: [], keywords: [], quote: "" };
+                    // Häufigster Fehler: das LLM setzt rohe Zeilenumbrüche innerhalb von JSON-Strings
+                    // statt sie als \n zu escapen — dadurch scheitert JSON.parse. Wir reparieren das gezielt.
+                    try {
+                        parsed = JSON.parse(sanitizeJsonNewlines(cleaned));
+                    } catch (secondErr) {
+                        parsed = { headline: "LinkedIn-Artikel", body: buffer, hashtags: [], keywords: [], quote: "" };
+                    }
                 }
                 renderLinkedInPreview(parsed);
             } catch (err) {

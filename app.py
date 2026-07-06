@@ -578,13 +578,26 @@ def _groq_stream_worker(messages: list[dict], model: str, max_tokens: int, tempe
     """Läuft in einem eigenen Thread, damit der blockierende Groq-Stream-Iterator den Event-Loop nicht blockiert."""
     try:
         client = _get_groq_client()
-        stream = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-        )
+        try:
+            # JSON-Modus erzwingt bei unterstützten Modellen strukturell valides JSON
+            # (u.a. korrektes Escaping von Zeilenumbrüchen in Strings).
+            stream = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+                response_format={"type": "json_object"},
+            )
+        except Exception:
+            # Falls das Modell response_format nicht unterstützt: normaler Modus als Fallback
+            stream = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+            )
         for chunk in stream:
             if not chunk.choices:
                 continue

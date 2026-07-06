@@ -72,20 +72,20 @@ gcloud config set project <DEIN-GCP-PROJEKT-ID>
 gcloud run deploy ki-immo-terminal \
   --source . \
   --region europe-west1 \
-  --allow-unauthenticated \
-  --set-env-vars GROQ_API_KEY=<DEIN-GROQ-KEY>
+  --allow-unauthenticated
 ```
 
-Die kompletten Befehle mit deinen echten Werten stehen fertig zum Copy-Paste in
-`DEPLOY_COMMANDS.txt` (nicht committed).
+Danach trägst du die Keys **direkt in der Cloud Run Konsole** ein (nicht über die Kommandozeile):
+[console.cloud.google.com/run](https://console.cloud.google.com/run) → Service `ki-immo-terminal`
+öffnen → **"Bearbeiten und neue Version bereitstellen"** → Tab **"Variablen & Secrets"** →
+Umgebungsvariablen hinzufügen: `GROQ_API_KEY`, `XAI_API_KEY`, `ANTHROPIC_API_KEY`,
+`FILIP_LINKEDIN_URL`, `FILIP_XING_URL` → **"Bereitstellen"**.
 
-**Sicherere Alternative** (empfohlen für Produktion) über Secret Manager statt `--set-env-vars`:
+Die Befehle ohne Secrets stehen auch fertig zum Copy-Paste in `DEPLOY_COMMANDS.txt` (nicht committed).
 
-```bash
-echo -n "<DEIN-GROQ-KEY>" | gcloud secrets create groq-api-key --data-file=-
-gcloud run deploy ki-immo-terminal --source . --region europe-west1 --allow-unauthenticated \
-  --set-secrets GROQ_API_KEY=groq-api-key:latest
-```
+**Sicherere Alternative** (empfohlen für Produktion): im selben Tab "Variablen & Secrets" bei
+"Secrets" auf "Referenz hinzufügen" gehen und einen zuvor im Secret Manager angelegten Secret
+verknüpfen, statt eine normale Umgebungsvariable zu verwenden.
 
 ## Feed-Datenbank
 
