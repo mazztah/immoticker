@@ -1,7 +1,7 @@
 # KI-Immo-Terminal
 
 Responsive News-Ticker-Hub für KI- und Immobilien-News (USA & Deutschland) plus Top-Wirtschaftsmagazine,
-mit KI-Chat und LinkedIn-Artikel-Generator. Backend liest 154 validierte RSS-Feeds **server-seitig**
+mit KI-Chat und LinkedIn-Artikel-Generator. Backend liest 344 validierte RSS-Feeds **server-seitig**
 (kein CORS-Proxy nötig — dadurch deutlich zuverlässiger als ein reiner Browser-Ansatz).
 
 ## Architektur
@@ -55,7 +55,7 @@ Dann `http://localhost:8080` öffnen. Die `.env` wird automatisch geladen.
 ```bash
 git init
 git add .
-git commit -m "KI-Immo-Terminal: Backend, 154 validierte Feeds, KI-Chat, LinkedIn-Generator"
+git commit -m "KI-Immo-Terminal: Backend, 344 validierte Feeds, KI-Chat, LinkedIn-Generator"
 git branch -M main
 git remote add origin https://github.com/<DEIN-USERNAME>/<DEIN-REPO>.git
 git push -u origin main
@@ -89,7 +89,7 @@ verknüpfen, statt eine normale Umgebungsvariable zu verwenden.
 
 ## Feed-Datenbank
 
-154 validierte Quellen in 5 Kategorien (`/api/feeds/meta` gibt die volle Liste zurück):
+344 validierte Quellen in 7 Kategorien (`/api/feeds/meta` gibt die volle Liste zurück):
 
 | Kategorie | Anzahl |
 |---|---|

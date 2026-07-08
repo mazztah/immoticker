@@ -188,6 +188,8 @@
         .re-us { background-color: #854d0e; color: #fcd34d; }
         .re-de { background-color: #9f1239; color: #fda4af; }
         .mag { background-color: #4c1d95; color: #c4b5fd; }
+        .inv { background-color: #065f46; color: #6ee7b7; }
+        .dev { background-color: #7c2d12; color: #fdba74; }
 
         .top50-table tr:hover {
             background-color: #111827;
@@ -249,9 +251,11 @@
                     <a href="#ki-de" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">KI DE</a>
                     <a href="#re-us" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Immobilien USA</a>
                     <a href="#re-de" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Immobilien DE</a>
+                    <a href="#inv" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Investoren</a>
+                    <a href="#dev" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Dev</a>
                     <a href="#top50" class="px-5 py-2 bg-violet-600 hover:bg-violet-500 transition-all text-white rounded-2xl font-semibold flex items-center gap-x-2 text-sm">
                         <i class="fa-solid fa-rss"></i>
-                        <span>Alle 163 RSS</span>
+                        <span>Alle 344 RSS</span>
                     </a>
                 </div>
                 
@@ -299,6 +303,12 @@
                 <div onclick="filterTicker('re-de')" class="cursor-pointer px-4 py-2 text-sm rounded-2xl border border-white/15 hover:border-violet-600 active:bg-white/[0.06] backdrop-blur-xl transition-colors flex items-center gap-x-2 category-pill re-de">
                     <span>RE DE</span>
                 </div>
+                <div onclick="filterTicker('inv')" class="cursor-pointer px-4 py-2 text-sm rounded-2xl border border-white/15 hover:border-violet-600 active:bg-white/[0.06] backdrop-blur-xl transition-colors flex items-center gap-x-2 category-pill inv">
+                    <span>INVESTOREN</span>
+                </div>
+                <div onclick="filterTicker('dev')" class="cursor-pointer px-4 py-2 text-sm rounded-2xl border border-white/15 hover:border-violet-600 active:bg-white/[0.06] backdrop-blur-xl transition-colors flex items-center gap-x-2 category-pill dev">
+                    <span>DEV</span>
+                </div>
             </div>
         </div>
 
@@ -334,7 +344,7 @@
                 </div>
                 
                 <div class="flex justify-between items-center mt-3 px-2 text-[10px] text-violet-700 font-mono">
-                    <div>SCROLLING INTELLIGENCE • 163 VALIDIERTE QUELLEN • PAUSE ON HOVER</div>
+                    <div>SCROLLING INTELLIGENCE • 344 VALIDIERTE QUELLEN • PAUSE ON HOVER</div>
                     <div class="flex items-center gap-x-4">
                         <button onclick="addBreakingNews()" 
                                 class="flex items-center gap-x-1.5 hover:text-violet-400 transition-colors">
@@ -357,7 +367,7 @@
 
     <!-- STATS BAR -->
     <div class="max-w-screen-2xl mx-auto px-6 pb-8">
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div class="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
                 <div>
                     <div class="text-violet-400 text-xs tracking-widest">VALIDIERTE QUELLEN</div>
@@ -385,6 +395,20 @@
                     <div class="text-4xl font-bold terminal-font" id="stat-mag">…</div>
                 </div>
                 <i class="fa-solid fa-newspaper text-4xl text-violet-900"></i>
+            </div>
+            <div class="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-violet-400 text-xs tracking-widest">INVESTOREN & EQUITY</div>
+                    <div class="text-4xl font-bold terminal-font" id="stat-inv">…</div>
+                </div>
+                <i class="fa-solid fa-sack-dollar text-4xl text-violet-900"></i>
+            </div>
+            <div class="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-violet-400 text-xs tracking-widest">DEV & PROGRAMMING</div>
+                    <div class="text-4xl font-bold terminal-font" id="stat-dev">…</div>
+                </div>
+                <i class="fa-solid fa-code text-4xl text-violet-900"></i>
             </div>
             <div class="bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between">
                 <div>
@@ -548,6 +572,43 @@
         </div>
     </div>
 
+    <!-- INVESTOREN & EQUITY SECTION -->
+    <div id="inv" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-end justify-between mb-6 cursor-pointer" onclick="toggleSection('inv')">
+            <div>
+                <span class="category-pill inv text-sm px-4 py-1">INVESTOREN & EQUITY</span>
+                <h2 class="text-4xl font-display tracking-tight mt-1">Investoren &amp; Real Equity</h2>
+                <p class="text-zinc-400">VC, Private Equity &amp; Real-Estate-Kapitalmärkte aus USA, EU, Singapur, Russland, Indien &amp; China — <span id="inv-status" class="text-violet-500">wird geladen…</span></p>
+            </div>
+            <i id="inv-chevron" class="fa-solid fa-chevron-down text-violet-600 text-xl transition-transform"></i>
+        </div>
+        
+        <div id="inv-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="inv-grid">
+                <!-- Live geladen -->
+            </div>
+            <p class="text-xs text-zinc-500 mt-4">Hinweis: Die meisten großen Private-Equity-Häuser (Blackstone, KKR, Carlyle) sowie viele russische/chinesische Fonds veröffentlichen keinen eigenen RSS-Feed. Gelistet sind Fachmedien, Verbände &amp; Plattformen mit tatsächlich funktionierendem Feed; einzelne exotische Quellen können gelegentlich ausfallen.</p>
+        </div>
+    </div>
+
+    <!-- DEV & PROGRAMMING SECTION -->
+    <div id="dev" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-end justify-between mb-6 cursor-pointer" onclick="toggleSection('dev')">
+            <div>
+                <span class="category-pill dev text-sm px-4 py-1">DEV & PROGRAMMING</span>
+                <h2 class="text-4xl font-display tracking-tight mt-1">Development &amp; Programming</h2>
+                <p class="text-zinc-400">Führende Entwickler-Blogs &amp; Engineering-Teams aus USA, EU, Russland, China, Indien &amp; Singapur — <span id="dev-status" class="text-violet-500">wird geladen…</span></p>
+            </div>
+            <i id="dev-chevron" class="fa-solid fa-chevron-down text-violet-600 text-xl transition-transform"></i>
+        </div>
+        
+        <div id="dev-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="dev-grid">
+                <!-- Live geladen -->
+            </div>
+        </div>
+    </div>
+
     <!-- TOP 50 RSS SECTION -->
     <div id="top50" class="max-w-screen-2xl mx-auto px-6 py-10 border-t border-white/10 bg-white/[0.06] backdrop-blur-xl/30">
         <div class="max-w-5xl mx-auto">
@@ -555,7 +616,7 @@
                 <div>
                     <div class="flex items-center gap-x-3">
                         <i class="fa-solid fa-list-check text-violet-400 text-3xl"></i>
-                        <h2 class="text-5xl font-display tracking-tighter">Alle 163 validierten Quellen</h2>
+                        <h2 class="text-5xl font-display tracking-tighter">Alle 344 validierten Quellen</h2>
                     </div>
                     <p class="mt-3 text-lg text-zinc-400">Ausschließlich Quellen mit einem tatsächlich existierenden, funktionierenden RSS-Feed — geprüft im Juli 2026. Firmen &amp; Investoren ohne eigenen RSS-Feed (das betrifft die meisten Private-Equity-Häuser) sind bewusst <span class="font-semibold text-violet-400">nicht</span> aufgeführt.</p>
                 </div>
@@ -564,7 +625,7 @@
                     <button onclick="copyAllRSS()" 
                             class="px-8 py-3.5 bg-violet-600 hover:bg-violet-500 active:bg-violet-700 transition-all text-white rounded-2xl font-semibold flex items-center justify-center gap-x-3 shadow-lg shadow-violet-950">
                         <i class="fa-solid fa-copy"></i>
-                        <span>ALLE 163 LINKS KOPIEREN</span>
+                        <span>ALLE 344 LINKS KOPIEREN</span>
                     </button>
                 </div>
             </div>
@@ -583,6 +644,9 @@
                     <option value="KI DE">KI DE</option>
                     <option value="Immobilien USA">Immobilien USA</option>
                     <option value="Immobilien DE">Immobilien DE</option>
+                    <option value="Top Magazine">Top Magazine</option>
+                    <option value="Investoren & Equity">Investoren & Equity</option>
+                    <option value="Dev & Programming">Dev & Programming</option>
                 </select>
             </div>
 
@@ -605,7 +669,7 @@
             </div>
             
             <div class="mt-4 text-center text-xs text-zinc-500">
-                Alle 163 Links wurden im Juli 2026 direkt abgerufen und auf ein echtes RSS/Atom-Format geprüft. Anthropic ist als Community-Mirror gekennzeichnet, da der Hersteller selbst keinen offiziellen RSS-Feed anbietet. Das Fetchen läuft jetzt server-seitig im Backend statt über Browser-CORS-Proxies — dadurch deutlich zuverlässiger.
+                Alle 344 Links wurden im Juli 2026 direkt abgerufen und auf ein echtes RSS/Atom-Format geprüft. Anthropic ist als Community-Mirror gekennzeichnet, da der Hersteller selbst keinen offiziellen RSS-Feed anbietet. Das Fetchen läuft jetzt server-seitig im Backend statt über Browser-CORS-Proxies — dadurch deutlich zuverlässiger.
             </div>
         </div>
     </div>
@@ -723,6 +787,8 @@
             if (cat === 'ai-de') return 'ai-de';
             if (cat === 're-us') return 're-us';
             if (cat === 're-de') return 're-de';
+            if (cat === 'inv') return 'inv';
+            if (cat === 'dev') return 'dev';
             return 'ai-us';
         }
         
@@ -731,6 +797,8 @@
             if (cat === 'ai-de') return 'KI DE';
             if (cat === 're-us') return 'RE USA';
             if (cat === 're-de') return 'RE DE';
+            if (cat === 'inv') return 'INVESTOREN';
+            if (cat === 'dev') return 'DEV';
             return 'NEWS';
         }
         
@@ -798,6 +866,8 @@
             setText('stat-ki', (c['KI USA'] || 0) + (c['KI DE'] || 0));
             setText('stat-re', (c['Immobilien USA'] || 0) + (c['Immobilien DE'] || 0));
             setText('stat-mag', c['Top Magazine'] || 0);
+            setText('stat-inv', c['Investoren & Equity'] || 0);
+            setText('stat-dev', c['Dev & Programming'] || 0);
             
             return data;
         }
@@ -808,7 +878,9 @@
             { cat: "KI DE",          gridId: "ki-de-grid",   statusId: "ki-de-status",   sectionId: "ki-de" },
             { cat: "Immobilien USA", gridId: "re-us-grid",   statusId: "re-us-status",   sectionId: "re-us" },
             { cat: "Immobilien DE",  gridId: "re-de-grid",   statusId: "re-de-status",   sectionId: "re-de" },
-            { cat: "Top Magazine",   gridId: "mag-grid",     statusId: "mag-status",     sectionId: "mag" }
+            { cat: "Top Magazine",   gridId: "mag-grid",     statusId: "mag-status",     sectionId: "mag" },
+            { cat: "Investoren & Equity", gridId: "inv-grid", statusId: "inv-status",    sectionId: "inv" },
+            { cat: "Dev & Programming",   gridId: "dev-grid", statusId: "dev-status",    sectionId: "dev" }
         ];
         
         // Ein-/Ausklappen einer Sektion
@@ -875,7 +947,7 @@
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-white/[0.06] backdrop-blur-xl/70';
                 
-                const catClass = feed.cat.includes('KI') ? (feed.cat.includes('USA') ? 'ai-us' : 'ai-de') : (feed.cat.includes('USA') ? 're-us' : 're-de');
+                const catClass = feed.cat.includes('Investoren') ? 'inv' : feed.cat.includes('Dev') ? 'dev' : feed.cat.includes('Magazine') ? 'mag' : feed.cat.includes('KI') ? (feed.cat.includes('USA') ? 'ai-us' : 'ai-de') : (feed.cat.includes('USA') ? 're-us' : 're-de');
                 
                 row.innerHTML = `
                     <td class="px-6 py-4 font-mono text-violet-700 text-xs w-8">${String(feed.id).padStart(2, '0')}</td>
@@ -950,7 +1022,7 @@
                 btns.forEach(btn => {
                     if (btn.textContent.includes('ALLE') || btn.textContent.includes('kopieren')) {
                         const orig = btn.innerHTML;
-                        btn.innerHTML = `<i class="fa-solid fa-check-double mr-2"></i> 50 LINKS KOPIERT!`;
+                        btn.innerHTML = `<i class="fa-solid fa-check-double mr-2"></i> ${allRSSFeeds.length} LINKS KOPIERT!`;
                         setTimeout(() => {
                             btn.innerHTML = orig;
                         }, 2200);
@@ -980,6 +1052,9 @@
         }
         
         function getCategoryClassForModal(cat) {
+            if (cat.includes('Investoren')) return 'inv';
+            if (cat.includes('Dev')) return 'dev';
+            if (cat.includes('Magazine')) return 'mag';
             if (cat.includes('KI') && cat.includes('USA')) return 'ai-us';
             if (cat.includes('KI') && cat.includes('DE')) return 'ai-de';
             if (cat.includes('Immobilien') && cat.includes('USA')) return 're-us';
@@ -1425,6 +1500,8 @@
         }
         
         function getCategoryClassForArticle(cat) {
+            if (cat.includes('Investoren')) return 'inv';
+            if (cat.includes('Dev')) return 'dev';
             if (cat.includes('KI') && cat.includes('USA')) return 'ai-us';
             if (cat.includes('KI') && cat.includes('DE')) return 'ai-de';
             if (cat.includes('Immobilien') && cat.includes('USA')) return 're-us';
