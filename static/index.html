@@ -1434,8 +1434,8 @@
             lastLinkedInArticle = article;
             const card = document.getElementById('linkedin-preview-card');
             const bodyHtml = formatLinkedInBody(article.body || '');
-            const hashtagsHtml = (article.hashtags || []).map(h => 
-                `<span class="text-violet-300 font-medium mr-2">#${h.replace(/^#/, '').replace(/\s+/g, '')}</span>`
+            const hashtagsHtml = (article.hashtags || []).map(h =>
+                `<span class="inline-block bg-[#0A66C2]/15 text-[#5B9BD9] text-xs font-semibold rounded-lg px-2.5 py-1 mr-1.5 mb-1.5">#${h.replace(/^#/, '').replace(/\s+/g, '')}</span>`
             ).join('');
             const keywordsHtml = (article.keywords || []).map(k => 
                 `<span class="inline-block bg-white/10 text-zinc-300 text-[11px] rounded-full px-2 py-0.5 mr-1 mb-1">${escapeHtml(k)}</span>`
@@ -1473,7 +1473,10 @@
                     </a>
                 </div>
                 
-                ${hashtagsHtml ? `<div class="text-sm mb-3 leading-relaxed">${hashtagsHtml}</div>` : ''}
+                ${hashtagsHtml ? `
+                    <div class="text-xs text-zinc-500 mb-1.5">Hashtags:</div>
+                    <div class="flex flex-wrap mb-3">${hashtagsHtml}</div>
+                ` : ''}
                 ${keywordsHtml ? `
                     <div class="text-xs text-zinc-500 mb-2">Keywords:</div>
                     <div class="mb-2">${keywordsHtml}</div>

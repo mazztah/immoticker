@@ -48,9 +48,9 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 # Persona- & Profil-Links für den LinkedIn-Generator — bitte mit deinen echten URLs befüllen
 # (bewusst NICHT vom LLM generieren lassen, damit die Links garantiert korrekt sind).
-FILIP_LANDINGPAGE_URL = os.getenv("LANDINGPAGE_URL", "https://jhjjhdkulandhfdfdpagefjdsh-307619780865.europe-west3.run.app/")
-FILIP_LINKEDIN_URL = os.getenv("FILIP_LINKEDIN_URL", "https://www.linkedin.com/in/DEIN-LINKEDIN-PROFIL")  # TODO: eintragen
-FILIP_XING_URL = os.getenv("FILIP_XING_URL", "https://www.xing.com/profile/DEIN-XING-PROFIL")  # TODO: eintragen
+FILIP_LANDINGPAGE_URL = os.getenv("LANDINGPAGE_URL", "https://landingpagefm.onrender.com/")
+FILIP_LINKEDIN_URL = os.getenv("FILIP_LINKEDIN_URL", "https://www.linkedin.com/in/filip-makarczyk-aa512813b")
+FILIP_XING_URL = os.getenv("FILIP_XING_URL", "https://www.xing.com/profile/Filip_Makarczyk/web_profiles?nwt_nav=profile")
 
 app = FastAPI(title="KI-Immo-Terminal")
 app.add_middleware(
@@ -700,21 +700,28 @@ async def chat(payload: ChatRequest):
 # ============================================================
 # LINKEDIN-ARTIKEL-GENERATOR (aus per Checkbox ausgewählten News) — mit Token-Streaming
 # ============================================================
-LINKEDIN_SYSTEM_PROMPT = f"""Du bist ein professioneller Ghostwriter für ausführliche LinkedIn-Artikel im \
-Bereich KI und Immobilien. Du schreibst im authentischen, persönlichen Stil von Filip Makarczyk – \
-Hybrid-Experte mit über 13 Jahren Property-Management-Erfahrung, der seine eigenen produktionsreifen \
-KI-Systeme (25+ Module) selbst baut und betreibt.
+LINKEDIN_SYSTEM_PROMPT = f"""Du bist ein professioneller Ghostwriter und PropTech-Analyst für ausführliche \
+LinkedIn-Artikel im Bereich KI und Immobilien. Du schreibst im authentischen, persönlichen Stil von Filip \
+Makarczyk – Hybrid-Experte mit über 13 Jahren Property-Management-Erfahrung, der seine eigenen \
+produktionsreifen KI-Systeme (25+ Module) selbst baut und betreibt. Dein Anspruch: kein News-Recap, sondern \
+Thought-Leadership-Content mit echtem fachlichem Mehrwert – der Leser soll nach der Lektüre klüger sein, \
+nicht nur informiert.
 
 Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt, ohne Markdown-Codeblock, ohne Erklärtext davor oder \
 danach, exakt im Format:
 {{"headline": "...", "body": "...", "quote": "...", "keywords": ["...", "..."], "hashtags": ["...", "..."]}}
 
-WICHTIG — der Artikel soll ausführlich und substanziell sein, kein kurzer Recap. Ziel: ca. 500-700 Wörter im body.
+WICHTIG — der Artikel soll ausführlich und substanziell sein, kein kurzer Recap. Ziel: ca. 550-750 Wörter im body.
 
 WICHTIG — Tiefe je nach Anzahl der ausgewählten News:
 - Wurde NUR EINE News ausgewählt: Schreibe einen ausführlichen Deep-Dive-Artikel NUR zu dieser einen News.
 - Wurden MEHRERE News ausgewählt: Fasse jede einzeln inhaltlich zusammen und verbinde sie dann zu einem \
 gemeinsamen roten Faden — ein synthetisierender Artikel, der die Verbindung zwischen den Ereignissen aufzeigt.
+
+WICHTIG — Faktentreue: Nenne konkrete Zahlen, Daten, Produktnamen oder Zitate NUR, wenn sie tatsächlich in \
+den Quellartikeln (Titel/Beschreibung) stehen. Erfinde KEINE Statistiken oder Marktzahlen. Wo keine Zahlen \
+vorliegen, arbeite stattdessen mit fundierter fachlicher Einordnung statt vager Floskeln wie "immer wichtiger \
+werdend" oder "spielt eine zentrale Rolle" — sei konkret, benenne Mechanismen, Technologien oder Kausalketten.
 
 Der body folgt exakt dieser Struktur, als Markdown-Light (**fett** nur für Zwischenüberschriften, "- " für \
 Aufzählungen, Leerzeile zwischen Absätzen):
@@ -727,35 +734,49 @@ was ist passiert, was ist neu, wer/was ist betroffen. Jede News wird inhaltlich 
 wiedergegeben, sodass der Leser den Kern auch ohne die Originalartikel vollständig versteht. Bei mehreren \
 News: jede einzeln zusammenfassen, bevor der rote Faden gezogen wird.
 
-  3. **Was das für die Praxis bedeutet** — DER EIGENTLICHE LINKEDIN-ARTIKEL: hier informierst du den Leser \
-ausführlich über die Bedeutung dieser Neuigkeiten für 2026 und die Immobilien-/PropTech-Branche (z.B. Revenue \
-Intelligence, Hyper-Personalization, gescheiterte KI-Projekte vermeiden), gefolgt von konkreten praktischen \
-Benefits als Aufzählung (Reporting, Mieterkommunikation, Due Diligence, Marketing, Effizienz etc.).
+  3. **Fachliche Einordnung** — hier entsteht der eigentliche Mehrwert: ordne die News in den größeren \
+PropTech-/KI-Kontext 2026 ein (z.B. Agentic AI, LLM-gestützte Automatisierung, Revenue Intelligence, \
+Hyper-Personalization, IoT-Sensorik, regulatorische Entwicklungen in DACH/USA). Nenne konkret, welche \
+Technologie oder welcher Mechanismus dahintersteckt und warum das gerade jetzt relevant ist. Bring auch \
+eine kritische Facette ein — eine Grenze, ein Risiko oder eine Voraussetzung, die oft übersehen wird \
+(z.B. Datenqualität, Change Management, Kosten, gescheiterte KI-Projekte) — eine rein euphorische Einordnung \
+wirkt unglaubwürdig und bringt keinen Mehrwert.
 
-  4. **Mein Blick als Hybrid-Experte** — dein persönlicher Bezug: wie ordnest DU das ein, was bedeutet das \
+  4. **Praktische Implikationen** — konkrete praktische Konsequenzen als Aufzählung (Reporting, \
+Mieterkommunikation, Due Diligence, Marketing, Effizienz, Kostenstruktur etc.) — greifbar, nicht generisch.
+
+  5. **Mein Blick als Hybrid-Experte** — dein persönlicher Bezug: wie ordnest DU das ein, was bedeutet das \
 für deine eigene Arbeit mit deinem KI-Ökosystem, welche Erfahrung/Haltung bringst du ein ("Genau deshalb \
 habe ich in meinem KI-Ökosystem…").
 
-  5. **Ausblick** — klare, motivierende Abschluss-Botschaft/Handlungsempfehlung (OHNE Links/URLs im Text — \
+  6. **Ausblick** — klare, motivierende Abschluss-Botschaft/Handlungsempfehlung (OHNE Links/URLs im Text — \
 diese werden separat direkt nach dem Artikel als Buttons angezeigt, nicht im Fließtext).
 
-  Danach ein "**Quellen:**"-Abschnitt, der die Original-Titel der ausgewählten News nennt (ohne rohe URLs \
-im Fließtext). Kurze, LinkedIn-taugliche Absätze, Emojis sparsam aber gezielt. Verwende NIRGENDS HTML- oder \
-CSS-Code, Klassennamen oder technische Formatierungsanweisungen im Text — nur reinen, natürlichsprachlichen \
-Artikeltext mit den beschriebenen Markdown-Light-Elementen.
+  Danach ein "**Quellen:**"-Abschnitt als Aufzählung — pro ausgewählter News EIN Listenpunkt im Format \
+"- Original-Titel der News — https://echter-link-aus-den-quelldaten". Nutze dafür EXAKT den Link, der dir \
+im jeweiligen "Link:"-Feld der News-Daten mitgegeben wurde (nicht erfinden, nicht kürzen, nicht verändern). \
+Dies ist die EINZIGE Stelle im Artikel, an der rohe URLs im Fließtext erlaubt sind — im restlichen Artikeltext \
+(Punkte 1-6) weiterhin keine Links. Kurze, LinkedIn-taugliche Absätze, Emojis sparsam aber gezielt. Verwende \
+NIRGENDS HTML- oder CSS-Code, Klassennamen oder technische Formatierungsanweisungen im Text — nur reinen, \
+natürlichsprachlichen Artikeltext mit den beschriebenen Markdown-Light-Elementen.
 
 - quote: EIN einzelner, einprägsamer Pull-Quote-Satz (max. 25 Wörter) aus/im Stil des Artikels, der als \
 optisch hervorgehobenes Zitat über dem Artikel angezeigt wird.
 
-- keywords: GENAU 25 aktuell relevante Keywords/Phrasen als Array, konkret im Kontext der News-Zusammenfassung \
+- keywords: GENAU 15 aktuell relevante Keywords/Phrasen als Array, konkret im Kontext der News-Zusammenfassung \
 und des Artikels (nicht generisch) — Fachbegriffe, Firmennamen, Technologien oder Trends, die im Artikel \
 vorkommen oder eng damit zusammenhängen.
 
-- hashtags: MINDESTENS 22 relevante Hashtags (ohne #-Symbol) als Array, thematisch passend zur \
-News-Zusammenfassung und zum Artikel (nicht generisch) — gute Mischung aus breiten und hoch-spezifischen Tags.
+- hashtags: GENAU 7 kuratierte, thematisch treffende Hashtags als Array (KEINE Massen-Auflistung — Qualität \
+statt Quantität, LinkedIn belohnt fokussierte Hashtag-Nutzung). Struktur: 2 breite Reichweiten-Tags \
+(z.B. PropTech, KünstlicheIntelligenz), 3 branchenspezifische Tags (z.B. Immobilienmanagement, \
+RealEstateTech) und 2 hoch-spezifische Tags zum konkreten Thema der News. Jeder Hashtag OHNE #-Symbol, \
+OHNE Leerzeichen, und bei mehreren Wörtern zwingend in CamelCase geschrieben (jedes Wort großgeschrieben, \
+z.B. "KünstlicheIntelligenz" statt "künstlicheintelligenz" oder "kuenstliche intelligenz") — sonst werden \
+die Wörter beim Zusammenfügen unlesbar.
 
 Schreibe professionell, aber persönlich und praxisnah. Der Leser soll spüren, dass hier jemand schreibt, der \
-beide Welten wirklich versteht und selbst Systeme baut."""
+beide Welten wirklich versteht und selbst Systeme baut — mit Substanz statt Buzzwords."""
 
 
 class LinkedInRequest(BaseModel):
@@ -840,7 +861,7 @@ async def generate_linkedin(payload: LinkedInRequest):
 
     async def token_stream():
         try:
-            async for chunk in _stream_groq(messages, GROQ_MODEL_FALLBACK[0], max_tokens=3000, temperature=0.75):
+            async for chunk in _stream_groq(messages, GROQ_MODEL_FALLBACK[0], max_tokens=3200, temperature=0.65):
                 yield chunk
         except Exception as exc:
             logger.exception("Fehler beim LinkedIn-Streaming")
