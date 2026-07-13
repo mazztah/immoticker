@@ -6,7 +6,7 @@ FastAPI-Backend, das:
      dadurch deutlich zuverlässiger als der browser-seitige Fetch der Vorversion)
   2) einen KI-Chat bereitstellt (Groq, mit Modell-Fallback-Kette)
   3) daraus LinkedIn-Artikel aus ausgewählten News generiert
-  4) das Frontend (static/index.html) ausliefert
+  4) das Frontend (static/index.html) ausliefert ya
 
 Deployment: Cloud Run-kompatibel (liest $PORT), Docker-Datei liegt bei.
 Secrets kommen ausschließlich aus Umgebungsvariablen (siehe .env.example) — niemals hier hardcoden.
