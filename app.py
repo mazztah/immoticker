@@ -48,7 +48,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 # Persona- & Profil-Links für den LinkedIn-Generator — bitte mit deinen echten URLs befüllen
 # (bewusst NICHT vom LLM generieren lassen, damit die Links garantiert korrekt sind).
-FILIP_LANDINGPAGE_URL = os.getenv("LANDINGPAGE_URL", "https://landingpagefm.onrender.com/")
+FILIP_LANDINGPAGE_URL = os.getenv("LANDINGPAGE_URL", "https://landingpagefm.fly.dev/")
 FILIP_LINKEDIN_URL = os.getenv("FILIP_LINKEDIN_URL", "https://www.linkedin.com/in/filip-makarczyk-aa512813b")
 FILIP_XING_URL = os.getenv("FILIP_XING_URL", "https://www.xing.com/profile/Filip_Makarczyk/web_profiles?nwt_nav=profile")
 
