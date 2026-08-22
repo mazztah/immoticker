@@ -602,9 +602,9 @@ def _get_groq_client():
 
 
 GROQ_MODEL_FALLBACK = [
-    "llama-3.3-70b-versatile",
-    "llama3-70b-8192",
-    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.6-27b",
 ]
 
 MAX_CHAT_MESSAGES = 20
@@ -833,8 +833,8 @@ def _groq_stream_worker(messages: list[dict], model: str, max_tokens: int, tempe
         out_q.put(None)  # Sentinel: Stream fertig
 
 
-async def _stream_groq(messages: list[dict], model: str, max_tokens: int = 2500, temperature: float = 0.7):
-    """Async-Generator, der Groq-Text-Chunks liefert, sobald sie eintreffen (echtes Token-Streaming)."""
+async def _stream_groq_single(messages: list[dict], model: str, max_tokens: int, temperature: float):
+    """Async-Generator für EIN Modell. Wirft RuntimeError bei Fehlschlag (z.B. Modell nicht verfügbar)."""
     out_q: "queue.Queue" = queue.Queue()
     thread = threading.Thread(
         target=_groq_stream_worker, args=(messages, model, max_tokens, temperature, out_q), daemon=True
@@ -850,6 +850,36 @@ async def _stream_groq(messages: list[dict], model: str, max_tokens: int = 2500,
         yield chunk
 
 
+async def _stream_groq(
+    messages: list[dict],
+    max_tokens: int = 2500,
+    temperature: float = 0.7,
+    model_fallback: list[str] | None = None,
+):
+    """Async-Generator mit Modell-Fallback-Kette (analog zu _call_groq): schlägt ein Modell fehl,
+    BEVOR bereits Text gestreamt wurde (z.B. 404 model_not_found, decommissioned, rate limit),
+    wird automatisch das nächste Modell aus der Kette versucht. Sobald einmal Text geflossen ist,
+    wird bei einem Abbruch nicht mehr stillschweigend neu gestartet (sonst doppelter/vermischter
+    Text beim Client) — dann wird der Fehler weitergereicht."""
+    models = model_fallback or GROQ_MODEL_FALLBACK
+    last_error: Exception | None = None
+    for model_name in models:
+        started_output = False
+        try:
+            async for chunk in _stream_groq_single(messages, model_name, max_tokens, temperature):
+                started_output = True
+                yield chunk
+            return  # Modell erfolgreich durchgelaufen
+        except Exception as exc:
+            last_error = exc
+            logger.warning("Groq-Streaming-Modell %s fehlgeschlagen: %s", model_name, exc)
+            if started_output:
+                # Es wurde bereits Text an den Client gestreamt — kein sauberer Neustart mehr möglich.
+                raise
+            continue  # nächstes Modell in der Kette versuchen
+    raise RuntimeError(f"Alle Groq-Modelle fehlgeschlagen: {last_error}")
+
+
 @app.post("/api/linkedin")
 async def generate_linkedin(payload: LinkedInRequest):
     if not payload.articles:
@@ -861,7 +891,7 @@ async def generate_linkedin(payload: LinkedInRequest):
 
     async def token_stream():
         try:
-            async for chunk in _stream_groq(messages, GROQ_MODEL_FALLBACK[0], max_tokens=3200, temperature=0.65):
+            async for chunk in _stream_groq(messages, max_tokens=3200, temperature=0.65):
                 yield chunk
         except Exception as exc:
             logger.exception("Fehler beim LinkedIn-Streaming")
