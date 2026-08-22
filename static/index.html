@@ -708,6 +708,36 @@
         </div>
     </div>
 
+    <!-- STANDORTANALYSE-MODAL: Echtzeit-KI-Bericht (10-Punkte-Kennzahlenkatalog) -->
+    <div id="standort-modal" onclick="if (event.target.id === 'standort-modal') closeStandortModal()" 
+         class="hidden fixed inset-0 bg-black/85 z-[110] flex items-center justify-center p-4 sm:p-6">
+        <div onclick="event.stopImmediatePropagation()" 
+             class="modal bg-[#0a0a0f] border border-violet-800 rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col terminal-window">
+            <div class="flex justify-between items-start p-6 pb-4 border-b border-white/10 flex-shrink-0">
+                <div class="min-w-0">
+                    <div class="category-pill ai-de text-xs mb-2 inline-flex items-center gap-x-1.5">
+                        <i class="fa-solid fa-chart-line"></i> <span>KI-Standortanalyse</span>
+                    </div>
+                    <h3 id="standort-modal-title" class="text-xl sm:text-2xl font-semibold truncate"></h3>
+                    <div id="standort-modal-subtitle" class="text-xs text-violet-500 mt-1"></div>
+                </div>
+                <button onclick="closeStandortModal()" class="text-zinc-400 hover:text-white text-2xl leading-none flex-shrink-0 ml-3">×</button>
+            </div>
+
+            <div id="standort-report-body" class="flex-1 overflow-y-auto custom-scrollbar p-6 text-[15px] leading-relaxed text-zinc-200"></div>
+
+            <div class="flex items-center gap-x-3 p-5 pt-4 border-t border-white/10 flex-shrink-0">
+                <button onclick="copyStandortReport()" 
+                        class="flex-1 py-3 bg-violet-600 hover:bg-violet-500 rounded-2xl font-semibold flex items-center justify-center gap-x-2 text-sm">
+                    <i class="fa-solid fa-copy"></i>
+                    <span>Bericht kopieren</span>
+                </button>
+                <button onclick="closeStandortModal()" 
+                        class="flex-1 py-3 border border-white/15 hover:bg-zinc-800 rounded-2xl font-medium text-sm">Schließen</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Tailwind script
         function initializeTailwind() {
@@ -1079,6 +1109,19 @@
             }
         }
         
+        // Kleiner generischer Toast-Hinweis (z.B. nach Kopieren)
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-6 right-6 bg-violet-600 text-white text-xs px-4 py-2 rounded-2xl shadow-xl flex items-center gap-x-2 z-[120]';
+            toast.innerHTML = `<i class="fa-solid fa-check"></i> <span>${escapeHtml(message)}</span>`;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.transition = 'all 0.3s';
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 1800);
+        }
+
         function closeModal() {
             const modal = document.getElementById('modal');
             modal.classList.remove('flex');
@@ -1737,6 +1780,26 @@
                     <div class="mt-4 text-[10px] text-violet-700">
                         KI-Empfehlung: Hohe Kaufkraft + starke digitale Infrastruktur = Hohes Potenzial für Premium- &amp; PropTech-Immobilien.
                     </div>
+
+                    <div class="mt-5 pt-4 border-t border-white/10">
+                        <div class="text-violet-400 text-xs font-mono mb-2 flex items-center gap-x-2">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <span>STANDORTANALYSE (KI, in Echtzeit)</span>
+                        </div>
+                        <select id="standort-asset-select" 
+                                class="w-full mb-2 bg-black/40 border border-violet-900 rounded-xl text-xs px-3 py-2 text-zinc-200 focus:outline-none focus:border-violet-500">
+                            <option value="alle">Alle Asset-Klassen (Parkhaus bis Data Center)</option>
+                            <option value="parkhaus">Parkhaus / Garage</option>
+                            <option value="logistik">Logistikimmobilie</option>
+                            <option value="datacenter">Mega-Data-Center</option>
+                        </select>
+                        <button onclick="startStandortanalyse(${city.rank})" 
+                                class="w-full py-3 bg-gradient-to-r from-violet-600 to-blue-600 hover:opacity-90 rounded-2xl font-semibold flex items-center justify-center gap-x-2 text-sm transition-opacity">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>Analyse</span>
+                        </button>
+                        <div class="text-[10px] text-violet-700 mt-1.5">10-Punkte-Kennzahlenkatalog mit Live-Internetrecherche (Browser-Use) für aktuelle Zahlen: Verkehr, Arbeitsmarkt, Energie, Grundstück, Markt, Regulatorik, Risiken, ESG, Asset-Klasse, Fazit.</div>
+                    </div>
                 </div>
             `;
             
@@ -1747,6 +1810,188 @@
             modal.classList.add('flex');
         }
         
+        // ============================================
+        // STANDORTANALYSE-GENERATOR (10-Punkte-Kennzahlenkatalog, Echtzeit-Streaming von /api/standortanalyse)
+        // ============================================
+        let lastStandortReportText = '';
+
+        function closeStandortModal() {
+            document.getElementById('standort-modal').classList.add('hidden');
+            document.getElementById('standort-modal').classList.remove('flex');
+        }
+
+        function copyStandortReport() {
+            if (!lastStandortReportText) return;
+            navigator.clipboard.writeText(lastStandortReportText).then(() => {
+                showToast('Bericht in Zwischenablage kopiert ✓');
+            }).catch(() => {
+                showToast('Kopieren fehlgeschlagen');
+            });
+        }
+
+        // Markdown-Light → HTML: Überschriften (##/###), Aufzählungen, Fettschrift, Absätze.
+        // Bewusst eigenständig von formatLinkedInBody, da Berichte echte Zwischenüberschriften nutzen.
+        function renderStandortMarkdown(text) {
+            const cleaned = (text || '')
+                .replace(/```[a-z]*\n?/gi, '')
+                .replace(/<\/?[a-z][^>]*>/gi, '');
+
+            const lines = cleaned.split('\n');
+            let html = '';
+            let listBuffer = [];
+
+            const flushList = () => {
+                if (listBuffer.length) {
+                    html += `<ul class="list-disc list-inside space-y-1 my-2.5 marker:text-violet-400">${listBuffer.join('')}</ul>`;
+                    listBuffer = [];
+                }
+            };
+
+            let paraBuffer = [];
+            const flushPara = () => {
+                if (paraBuffer.length) {
+                    html += `<p class="mb-3">${paraBuffer.map(inlineMd).join('<br>')}</p>`;
+                    paraBuffer = [];
+                }
+            };
+
+            for (const rawLine of lines) {
+                const line = rawLine.trimEnd();
+                const trimmed = line.trim();
+
+                if (!trimmed) { flushPara(); flushList(); continue; }
+
+                if (/^###\s+/.test(trimmed)) {
+                    flushPara(); flushList();
+                    html += `<h4 class="text-sm font-bold text-violet-300 mt-4 mb-1.5">${inlineMd(trimmed.replace(/^###\s+/, ''))}</h4>`;
+                } else if (/^##\s+/.test(trimmed)) {
+                    flushPara(); flushList();
+                    html += `<h3 class="text-base font-bold text-violet-200 mt-5 mb-2 pb-1 border-b border-violet-900/60">${inlineMd(trimmed.replace(/^##\s+/, ''))}</h3>`;
+                } else if (/^#\s+/.test(trimmed)) {
+                    flushPara(); flushList();
+                    html += `<h2 class="text-lg font-bold text-white mt-5 mb-2">${inlineMd(trimmed.replace(/^#\s+/, ''))}</h2>`;
+                } else if (/^[-•]\s+/.test(trimmed)) {
+                    flushPara();
+                    listBuffer.push(`<li>${inlineMd(trimmed.replace(/^[-•]\s+/, ''))}</li>`);
+                } else {
+                    flushList();
+                    paraBuffer.push(trimmed);
+                }
+            }
+            flushPara(); flushList();
+            return html;
+        }
+
+        async function startStandortanalyse(rank) {
+            const city = topCities.find(c => c.rank === rank);
+            if (!city) return;
+
+            const assetSelectEl = document.getElementById('standort-asset-select');
+            const assetClass = assetSelectEl ? assetSelectEl.value : 'alle';
+            const assetLabels = {
+                alle: 'Alle Asset-Klassen',
+                parkhaus: 'Parkhaus / Garage',
+                logistik: 'Logistikimmobilie',
+                datacenter: 'Mega-Data-Center'
+            };
+
+            closeModal(); // Stadt-Detail-Modal schließen, Report-Modal öffnen
+
+            const modal = document.getElementById('standort-modal');
+            const titleEl = document.getElementById('standort-modal-title');
+            const subtitleEl = document.getElementById('standort-modal-subtitle');
+            const bodyEl = document.getElementById('standort-report-body');
+
+            titleEl.textContent = `${city.name}`;
+            subtitleEl.textContent = `${assetLabels[assetClass] || 'Alle Asset-Klassen'} • Rang ${city.rank} nach Kaufkraft`;
+            bodyEl.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-16 text-violet-300">
+                    <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-4"></i>
+                    <div class="text-sm font-medium" id="standort-loading-label">Recherchiert aktuelle Daten für ${escapeHtml(city.name)} im Web...</div>
+                    <div class="text-xs text-zinc-500 mt-1">10-Punkte-Kennzahlenkatalog wird erstellt — kann durch Live-Internetrecherche etwas länger dauern</div>
+                </div>
+            `;
+            lastStandortReportText = '';
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            const stages = [
+                'Prüfe Verkehr & Infrastruktur...',
+                'Analysiere Arbeitsmarkt...',
+                'Bewerte Energie & Anbindung...',
+                'Untersuche Markt & Wettbewerb...',
+                'Prüfe Risiken & ESG...',
+                'Formuliere Fazit & Empfehlungen...'
+            ];
+            let buffer = '';
+            let lastLabelUpdate = 0;
+            let lastRenderUpdate = 0;
+
+            try {
+                const response = await fetch('/api/standortanalyse', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                        name: city.name,
+                        country: city.country,
+                        rank: city.rank,
+                        kaufkraft: city.kaufkraft,
+                        median: city.median,
+                        type: city.type,
+                        insight: city.insight,
+                        asset_class: assetClass
+                    })
+                });
+                if (!response.ok || !response.body) {
+                    const errText = await response.text();
+                    throw new Error(`Backend-Fehler ${response.status}: ${errText.substring(0, 200)}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let firstChunkReceived = false;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    if (buffer.includes('__STREAM_ERROR__')) {
+                        throw new Error(buffer.split('__STREAM_ERROR__:')[1] || 'Unbekannter Streaming-Fehler');
+                    }
+
+                    const now = Date.now();
+                    if (!firstChunkReceived) {
+                        firstChunkReceived = true;
+                        bodyEl.innerHTML = '<div id="standort-live-text"></div>';
+                    }
+                    // Fortschritts-Hinweis nur solange kaum Text da ist
+                    if (buffer.length < 200 && now - lastLabelUpdate > 900) {
+                        const stageIdx = Math.min(stages.length - 1, Math.floor(buffer.length / 40));
+                        const label = document.getElementById('standort-loading-label');
+                        if (label) label.textContent = stages[stageIdx];
+                        lastLabelUpdate = now;
+                    }
+                    // Live-Rendering des bisherigen Markdown-Textes, gedrosselt für Performance
+                    if (now - lastRenderUpdate > 220) {
+                        const liveEl = document.getElementById('standort-live-text');
+                        if (liveEl) liveEl.innerHTML = renderStandortMarkdown(buffer);
+                        bodyEl.scrollTop = bodyEl.scrollHeight;
+                        lastRenderUpdate = now;
+                    }
+                }
+
+                const finalText = buffer.replace(/\n?__STREAM_ERROR__.*$/s, '').trim();
+                lastStandortReportText = finalText;
+                bodyEl.innerHTML = `<div>${renderStandortMarkdown(finalText)}</div>`;
+            } catch (err) {
+                bodyEl.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">
+                    <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><br>${escapeHtml(err.message)}
+                </div>`;
+            }
+        }
+
         // Initialize everything
         async function initializeApp() {
             initializeTailwind();
