@@ -797,23 +797,40 @@ def _build_linkedin_messages(articles: list[dict]) -> list[dict]:
     ]
 
 
-def _groq_stream_worker(messages: list[dict], model: str, max_tokens: int, temperature: float, out_q: "queue.Queue"):
+def _groq_stream_worker(
+    messages: list[dict],
+    model: str,
+    max_tokens: int,
+    temperature: float,
+    out_q: "queue.Queue",
+    json_mode: bool = True,
+):
     """Läuft in einem eigenen Thread, damit der blockierende Groq-Stream-Iterator den Event-Loop nicht blockiert."""
     try:
         client = _get_groq_client()
-        try:
-            # JSON-Modus erzwingt bei unterstützten Modellen strukturell valides JSON
-            # (u.a. korrektes Escaping von Zeilenumbrüchen in Strings).
-            stream = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-                response_format={"type": "json_object"},
-            )
-        except Exception:
-            # Falls das Modell response_format nicht unterstützt: normaler Modus als Fallback
+        if json_mode:
+            try:
+                # JSON-Modus erzwingt bei unterstützten Modellen strukturell valides JSON
+                # (u.a. korrektes Escaping von Zeilenumbrüchen in Strings).
+                stream = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                    response_format={"type": "json_object"},
+                )
+            except Exception:
+                # Falls das Modell response_format nicht unterstützt: normaler Modus als Fallback
+                stream = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+        else:
+            # Reiner Freitext/Markdown (z.B. Standortanalyse-Bericht) — kein JSON-Mode nötig/gewünscht.
             stream = client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -833,11 +850,13 @@ def _groq_stream_worker(messages: list[dict], model: str, max_tokens: int, tempe
         out_q.put(None)  # Sentinel: Stream fertig
 
 
-async def _stream_groq_single(messages: list[dict], model: str, max_tokens: int, temperature: float):
+async def _stream_groq_single(
+    messages: list[dict], model: str, max_tokens: int, temperature: float, json_mode: bool = True
+):
     """Async-Generator für EIN Modell. Wirft RuntimeError bei Fehlschlag (z.B. Modell nicht verfügbar)."""
     out_q: "queue.Queue" = queue.Queue()
     thread = threading.Thread(
-        target=_groq_stream_worker, args=(messages, model, max_tokens, temperature, out_q), daemon=True
+        target=_groq_stream_worker, args=(messages, model, max_tokens, temperature, out_q, json_mode), daemon=True
     )
     thread.start()
     loop = asyncio.get_event_loop()
@@ -855,6 +874,7 @@ async def _stream_groq(
     max_tokens: int = 2500,
     temperature: float = 0.7,
     model_fallback: list[str] | None = None,
+    json_mode: bool = True,
 ):
     """Async-Generator mit Modell-Fallback-Kette (analog zu _call_groq): schlägt ein Modell fehl,
     BEVOR bereits Text gestreamt wurde (z.B. 404 model_not_found, decommissioned, rate limit),
@@ -866,7 +886,7 @@ async def _stream_groq(
     for model_name in models:
         started_output = False
         try:
-            async for chunk in _stream_groq_single(messages, model_name, max_tokens, temperature):
+            async for chunk in _stream_groq_single(messages, model_name, max_tokens, temperature, json_mode):
                 started_output = True
                 yield chunk
             return  # Modell erfolgreich durchgelaufen
@@ -895,6 +915,210 @@ async def generate_linkedin(payload: LinkedInRequest):
                 yield chunk
         except Exception as exc:
             logger.exception("Fehler beim LinkedIn-Streaming")
+            yield f"\n__STREAM_ERROR__: {exc}"
+
+    return StreamingResponse(token_stream(), media_type="text/plain; charset=utf-8")
+
+
+# ============================================================
+# STANDORTANALYSE-GENERATOR (Top-50-Städte-Sidebar → Button "Standortanalyse generieren")
+# Kennzahlenkatalog gem. 10-Punkte-Schema: Verkehr, Arbeitsmarkt, Energie/Infrastruktur,
+# Grundstück/Mikrostandort, Markt/Wettbewerb, Regulatorik, Risiken, ESG, Asset-Klasse-Spezifika, Fazit.
+# ============================================================
+STANDORT_ASSET_LABELS = {
+    "alle": "alle Asset-Klassen (Parkhaus/Garage bis Logistikimmobilie und Mega-Data-Center)",
+    "parkhaus": "Parkhäuser / Garagen",
+    "logistik": "Logistikimmobilien",
+    "datacenter": "Mega-Data-Center / Hyperscale-Rechenzentren",
+}
+
+# Groq "Compound"-Systeme (groq/compound, groq/compound-mini) sind agentische Modelle mit eingebauten
+# Tools — u.a. Web-Suche und Browser-Automatisierung (powered by Browser Use) sowie Code-Ausführung.
+# Sie rufen diese Tools bei Bedarf selbstständig auf und recherchieren so echte, aktuelle Daten im Web,
+# statt nur aus dem Trainingswissen zu antworten. Für die Standortanalyse daher bevorzugt genutzt;
+# als Reserve (falls Compound ausfällt/limitiert ist) die normale Text-Modell-Kette ohne Internetzugriff.
+STANDORT_MODEL_FALLBACK = ["groq/compound", "groq/compound-mini"] + GROQ_MODEL_FALLBACK
+
+STANDORT_SYSTEM_PROMPT = """Du bist ein Senior-Standortanalyst für gewerbliche Immobilienprojekte — von \
+Parkhäusern/Garagen über Logistikimmobilien bis zu Mega-Data-Centern (Hyperscale-Rechenzentren). Du erstellst \
+für das "KI-IMMO-Terminal" (immoticker) auf Anfrage einen professionellen, investorenreifen Standortbericht \
+für eine einzelne Stadt aus der Top-50-Kaufkraft-Liste. Kaufkraft dient dabei NUR als makroökonomischer \
+Kontextrahmen, nicht als Analysefokus.
+
+Antworte AUSSCHLIESSLICH mit dem fertigen Bericht als reiner Markdown-Light-Text (keine Erklärungen davor \
+oder danach, kein Code-Block, kein "Hier ist der Bericht:"). Nutze "## " für die 10 Hauptkategorien-Überschriften, \
+"**fett**" für Zwischenpunkte/Kennzahlennamen, "- " für Aufzählungen, Leerzeilen zwischen Absätzen.
+
+WICHTIG — Live-Recherche: Dir steht ein eingebautes Web-Recherche-/Browser-Werkzeug zur Verfügung. Nutze es \
+AKTIV, um für diesen Standort aktuelle, verifizierbare Daten zu ermitteln — insbesondere zu: Strompreisen/ \
+Netzentgelten und Umspannwerken/Interconnection-Timelines, Gewerbemietpreisen und Grundstückspreisen, \
+Leerstandsquoten und Marktreports (CBRE/JLL/Colliers/Savills), bekannten Logistik-/Data-Center-Ansiedlungen \
+und -Pipelines in der Region, kommunalen Förderprogrammen/Ansiedlungspolitik, sowie Arbeitslosenquote und \
+Lohnniveau (z.B. von Statistikämtern/Bundesagentur für Arbeit/BLS). Recherchiere für JEDE Kategorie, in der \
+sich konkrete, tagesaktuelle Zahlen finden lassen, bevor du schreibst — verlasse dich nicht nur auf \
+allgemeines Trainingswissen. Wo eine recherchierte Zahl in den Bericht einfließt, nenne die Quelle knapp in \
+Klammern (z.B. "(Quelle: destatis.de, 2026)" oder "(Quelle: CBRE Marktbericht)"). Nur wenn trotz Recherche \
+keine belastbare Zahl auffindbar ist, arbeite mit einer klar gekennzeichneten Einschätzung/Bandbreite \
+statt einer erfundenen Zahl (z.B. "überdurchschnittlich (Einschätzung, keine Primärquelle gefunden)"). \
+Erfinde niemals konkrete Firmennamen, Adressen oder Statistiken, die wie recherchierte Fakten wirken, ohne \
+sie tatsächlich recherchiert zu haben.
+
+Der Bericht behandelt GENAU diese 10 Kategorien in dieser Reihenfolge, inkl. der jeweiligen Unterpunkte als \
+Aufzählung (jeder Unterpunkt mit einer kurzen, stadtbezogenen Einschätzung, nicht nur als Stichwort-Liste):
+
+## Kopf
+- Stadt, Land, Ranking und Kaufkraft-Kontext (aus den mitgelieferten Termdaten übernehmen, nicht neu erfinden)
+- Kurzprofil: Einwohnerzahl(-größenordnung), Wirtschaftsstruktur, Rolle als Logistik-/Data-Center-/Dienstleistungsstandort
+- Untersuchungsrahmen: {asset_scope}
+
+## 1. Verkehrliche Erreichbarkeit und Infrastruktur
+- Entfernung/Fahrzeit zu Autobahnanschlüssen, Bundesstraßen, wichtigen Knotenpunkten
+- Multimodale Anbindung (Schiene/Gleisanschluss, Wasserstraßen/Häfen, Flughafen, Güterverkehrszentren)
+- Straßenqualität, Kapazität, Schwerlastverkehrsanteil, Stauhäufigkeit
+- Lkw-Zufahrt, Rangierflächen, Andockmöglichkeiten (Tore pro 1.000 m², Truck-Court-Tiefe)
+- ÖPNV- und Mitarbeiter-Erreichbarkeit (Pendler-Isochronen 20–30 Min.)
+- Sichtbarkeit/Einfahrtsqualität, Verkehrserzeugung, Last-Mile- vs. Bulk-Logistik-Eignung
+
+## 2. Arbeitsmarkt und Human Resources
+- Größe/Verfügbarkeit des Arbeitskräftepools, Pendlerströme, Arbeitslosenquote (Größenordnung)
+- Qualifikationsstruktur (Fachkräfte, IT/Technik, Lager-/Fahrpersonal)
+- Lohn- und Gehaltsniveau, Lohnnebenkosten
+- Demografie/Altersstruktur der erwerbsfähigen Bevölkerung
+- Bildungs- und Ausbildungseinrichtungen (Hochschulen, Berufsschulen)
+- Gewerkschaftlicher Organisationsgrad
+- Recruitability und Lebensqualität (v.a. für Data-Center-/IT-Fachkräfte)
+
+## 3. Energie, Versorgung und technische Infrastruktur
+- Stromverfügbarkeit/-kapazität (MW-Größenordnung, Umspannwerke, Interconnection-Timeline, Redundanz N+1/2N)
+- Strompreise/Tarifstruktur, PPA-Möglichkeiten
+- Erneuerbare Energien und On-Site-Potenzial (PV, Wind)
+- Glasfaser-/Netzanbindung (Nähe zu Internet-Exchange-Points, Carrier-Diversity, Dark Fiber, Latenz)
+- Wasserverfügbarkeit und Kühlpotenzial
+- Abwasser, Gasversorgung, Bodenbelastbarkeit/Geotechnik
+- Abwärmenutzungs- und Synergiepotenzial
+
+## 4. Grundstücks- und Flächenmerkmale (Mikrostandort)
+- Verfügbare Grundstücksgrößen, Zuschnitt, Erweiterbarkeit/Reserveflächen
+- Topografie, Bodenbeschaffenheit, Altlasten-Risiko
+- Erschließungsgrad und -kosten
+- Baurecht (GE/GI-Gebiete, GRZ/GFZ, Gebäudehöhe, Abstandsflächen)
+- Brownfield- vs. Greenfield-Potenzial in der Region
+- Nachbarschaft und Konfliktpotenzial (Lärm, Emissionen)
+- Sichtbarkeit/Mikrolage (Frequenzbringer bei Parkhäusern)
+
+## 5. Markt- und Wettbewerbskennzahlen
+- Leerstandsquote und Angebotsvolumen (m² bzw. MW) im Teilmarkt
+- Spitzen-/Durchschnittsmieten und Mietwachstumstrend
+- Grundstückspreise (€/m² erschlossenes Gewerbebauland)
+- Flächenumsatz/Take-up, Investmentvolumen, Anfangsrenditen
+- Wettbewerbslandschaft und Clusterbildung (Logistik-Hubs, Data-Center-Cluster)
+- Pipeline (bekannte/typische geplante Projekte in der Region)
+- Nachfrageindikatoren (E-Commerce-Wachstum, Cloud-/KI-Nachfrage, Produktionsverlagerungen)
+
+## 6. Regulatorische, planungsrechtliche und politische Faktoren
+- Genehmigungsdauer/-sicherheit (Bauleitplanung, Immissionsschutz, UVP)
+- Kommunale/regionale Förderpolitik und Ansiedlungs-Incentives
+- Umwelt-/Naturschutzauflagen
+- Datenschutz-/Sicherheitsanforderungen (v.a. Data Center)
+- Kommunale Verkehrs-/Parkraumpolitik (v.a. Parkhäuser)
+- Rechtssicherheit und politische Stabilität
+- ESG-/Nachhaltigkeitsanforderungen (Taxonomie, Berichtspflichten)
+
+## 7. Risikofaktoren und Resilienz
+- Naturgefahren (Hochwasser, Sturm, Hitze/Trockenheit, ggf. Erdbeben) für diese Region
+- Man-made-Risiken (Flughafennähe, kritische Industrie/Störfallanlagen)
+- Klimarisiken und Anpassungsfähigkeit (v.a. Kühlbedarf)
+- Versicherbarkeit, gesellschaftliche/politische Akzeptanz (NIMBY-Risiko)
+- Versorgungsrisiken (Netzüberlastung, Blackout-Wahrscheinlichkeit)
+
+## 8. Nachhaltigkeits- und ESG-Kennzahlen
+- CO₂-/THG-Fußabdruck-Potenzial und Reduktionshebel
+- Potenzial erneuerbare Energien/Eigenversorgung
+- Wasserverbrauch/-effizienz (WUE), Power Usage Effectiveness (PUE) und Kühlkonzept-Eignung
+- Biodiversität, Regenwassermanagement, Versiegelungsgrad
+- Circular-Economy-/Umnutzungspotenzial (z.B. Logistik ↔ Data Center)
+- Zertifizierungspotenzial (DGNB, LEED, BREEAM)
+
+## 9. Spezifische Zusatzkennzahlen nach Asset-Klasse
+Behandle HIER NUR die tatsächlich angefragte(n) Asset-Klasse(n): {asset_scope}. Nutze je nach Auswahl die \
+passenden der folgenden Unterpunkte (bei "alle Asset-Klassen" alle drei Blöcke mit eigener Zwischenüberschrift):
+- **Parkhäuser/Garagen:** Frequenzbringer im Einzugsgebiet, Parkplatzbedarf vs. Angebot, Auslastungsprofile, \
+Gebührenstruktur, Nutzerfreundlichkeit/Sicherheit
+- **Logistikimmobilien:** Nähe zu Absatzmärkten/Produktionsstandorten (Drive-Time), Hallenhöhe/Bodenlast/Toranzahl, \
+Automatisierungstauglichkeit, Verkehrserzeugung, Last-Mile- vs. Zentrallager-Eignung
+- **Mega-Data-Center/Hyperscale:** Verfügbare/skalierbare IT-Last (MW), Speed-to-Power, Nähe zu Netzknoten/Latenz, \
+Kühlstrategie/Wasserbedarf, Sicherheitsabstände, Cluster-Effekte/Fachkräfte, Mietvertragsqualität/Mieterbonität
+
+## 10. Gesamtfazit und priorisierte Empfehlungen
+- Stärken / Schwächen / Chancen / Risiken (kompakt, stichpunktartig)
+- Qualitativer Eignungsscore (z.B. "hoch/mittel/niedrig" oder X/100) je betrachteter Asset-Klasse
+- Top-3-Handlungsempfehlungen und nächste konkrete Due-Diligence-Schritte
+- Kurzer Hinweis zum Rechercheumfang: welche Kernzahlen live recherchiert werden konnten und wo auf \
+Einschätzungen zurückgegriffen wurde; vor einer Investitionsentscheidung zusätzliche Verifikation durch \
+Netzbetreiber, Kommune und Makler/Marktforscher (z.B. CBRE, JLL, Colliers) empfehlen
+
+Stil: professionell, sachlich, investorenreif, deutsche Fachsprache der Immobilien-/Logistik-/Rechenzentrumsbranche, \
+keine Marketing-Floskeln, keine erfundenen Statistiken. Ziel-Länge: ca. 1.100–1.700 Wörter (kann bei umfangreicher \
+Recherche mit vielen Quellenangaben etwas länger ausfallen). Schließe den Bericht mit einem kurzen Abschnitt \
+"**Quellen:**" ab — als Aufzählung der tatsächlich recherchierten Quellen/Domains, die du für die genannten \
+Zahlen genutzt hast (keine erfundenen Quellen; wenn keine Live-Recherche möglich war, diesen Abschnitt weglassen)."""
+
+
+class StandortanalyseRequest(BaseModel):
+    name: str
+    country: str | None = None
+    rank: int | None = None
+    kaufkraft: float | str | None = None
+    median: str | None = None
+    type: str | None = None
+    insight: str | None = None
+    asset_class: str = "alle"
+
+
+def _build_standort_messages(payload: "StandortanalyseRequest") -> list[dict]:
+    asset_scope = STANDORT_ASSET_LABELS.get(payload.asset_class, STANDORT_ASSET_LABELS["alle"])
+    system = STANDORT_SYSTEM_PROMPT.format(asset_scope=asset_scope)
+
+    land = "Deutschland" if (payload.country or "").upper() == "DE" else (payload.country or "unbekannt")
+    kontext_zeilen = [
+        f"Stadt: {payload.name}",
+        f"Land: {land}",
+        f"Ranking in der Top-50-Kaufkraft-Liste: {payload.rank}" if payload.rank else None,
+        f"Kaufkraft-Kennzahl (Terminal): {payload.kaufkraft}" if payload.kaufkraft is not None else None,
+        f"Median-Kaufkraft/-Einkommen (Terminal): {payload.median}" if payload.median else None,
+        f"Städtetyp: {payload.type}" if payload.type else None,
+        f"Kurz-Insight aus dem Terminal: {payload.insight}" if payload.insight else None,
+        f"Angeforderte Asset-Klasse(n) für Punkt 9: {asset_scope}",
+    ]
+    kontext = "\n".join(line for line in kontext_zeilen if line)
+
+    user = (
+        f"Erstelle den vollständigen Standortanalyse-Bericht für folgende Stadt:\n\n{kontext}\n\n"
+        f"Halte dich exakt an die 10 Kategorien und die Ausgaberegeln aus der Systemanweisung."
+    )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+
+@app.post("/api/standortanalyse")
+async def generate_standortanalyse(payload: StandortanalyseRequest):
+    if not payload.name:
+        return JSONResponse({"error": "Stadtname fehlt."}, status_code=400)
+    if not GROQ_API_KEY:
+        return JSONResponse({"error": "GROQ_API_KEY ist nicht konfiguriert."}, status_code=503)
+
+    messages = _build_standort_messages(payload)
+
+    async def token_stream():
+        try:
+            async for chunk in _stream_groq(
+                messages, max_tokens=5000, temperature=0.5, model_fallback=STANDORT_MODEL_FALLBACK, json_mode=False
+            ):
+                yield chunk
+        except Exception as exc:
+            logger.exception("Fehler beim Standortanalyse-Streaming")
             yield f"\n__STREAM_ERROR__: {exc}"
 
     return StreamingResponse(token_stream(), media_type="text/plain; charset=utf-8")
