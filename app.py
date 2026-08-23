@@ -45,6 +45,9 @@ logger = logging.getLogger("ki_immo_terminal")
 # ============================================================
 GROQ_API_KEY = os.getenv("GROQ_API_KEY") or os.getenv("XAI_API_KEY")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+# SerpApi (Google-Suche) für die Standortanalyse-Websuche — dieselbe, im Schwesterprojekt
+# "telllmeeeeight" nachweislich funktionierende Anbindung (dort: search.py), hier 1:1 portiert.
+SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 
 # Persona- & Profil-Links für den LinkedIn-Generator — bitte mit deinen echten URLs befüllen
 # (bewusst NICHT vom LLM generieren lassen, damit die Links garantiert korrekt sind).
@@ -921,6 +924,129 @@ async def generate_linkedin(payload: LinkedInRequest):
 
 
 # ============================================================
+# LIVE-WEBSUCHE (SerpApi/Google) — 1:1 aus dem Schwesterprojekt "telllmeeeeight" (search.py) portiert,
+# dort nachweislich funktionierend. Async-Variante via httpx statt requests (httpx ist bereits Dependency).
+# Grund für den Wechsel weg von groq/compound: dessen eingebautes Browser-Use-Tool war bei diesem Projekt
+# nicht zuverlässig nutzbar — die explizite SerpApi-Suche + Prompt-Injection ist der erprobte, robuste Weg.
+# ============================================================
+def has_valid_serpapi_key() -> bool:
+    return bool(SERPAPI_KEY and len(SERPAPI_KEY) >= 20)
+
+
+async def _serpapi_web_search(
+    client: httpx.AsyncClient,
+    query: str,
+    num_results: int = 6,
+    country: str = "de",
+    language: str = "de",
+) -> dict:
+    """Führt eine Google-Suche über SerpApi aus. Gibt bei Fehlern/fehlendem Key ein
+    einheitliches Dict mit success=False zurück (wirft nie), damit ein einzelner
+    fehlgeschlagener Query nicht die ganze Recherche abbricht."""
+    if not has_valid_serpapi_key():
+        return {"success": False, "error": "SERPAPI_KEY fehlt/ungültig", "query": query, "results": []}
+
+    params = {
+        "engine": "google",
+        "q": query.strip(),
+        "num": min(max(num_results, 3), 10),
+        "hl": language,
+        "gl": country,
+        "location": "Germany" if country == "de" else "United States",
+        "api_key": SERPAPI_KEY,
+    }
+    try:
+        resp = await client.get("https://serpapi.com/search", params=params, timeout=12)
+        resp.raise_for_status()
+        data = resp.json()
+        results = []
+        for item in (data.get("organic_results") or [])[:num_results]:
+            snippet = item.get("snippet") or (item.get("rich_snippet") or {}).get("snippet", "")
+            results.append(
+                {
+                    "title": item.get("title", "-"),
+                    "link": item.get("link", item.get("displayed_link", "-")),
+                    "snippet": (snippet or "").strip(),
+                    "date": item.get("date", ""),
+                }
+            )
+        answer_box = data.get("answer_box") or {}
+        return {
+            "success": True,
+            "query": query,
+            "results": results,
+            "answer": answer_box.get("answer") or answer_box.get("snippet"),
+        }
+    except httpx.TimeoutException:
+        logger.warning("SerpApi Timeout für Query: %s", query)
+        return {"success": False, "error": "Timeout", "query": query, "results": []}
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code if exc.response is not None else 0
+        logger.warning("SerpApi HTTP %s für Query %s", status, query)
+        return {"success": False, "error": f"HTTP {status}", "query": query, "results": []}
+    except Exception as exc:
+        logger.warning("SerpApi Fehler für Query %s: %s", query, exc)
+        return {"success": False, "error": str(exc)[:200], "query": query, "results": []}
+
+
+def _format_search_result_for_prompt(result: dict) -> str:
+    if not result.get("success"):
+        return f'Suche "{result.get("query", "")}": fehlgeschlagen ({result.get("error", "unbekannt")})'
+    lines = [f'Web-Suchergebnisse für: "{result["query"]}"']
+    if result.get("answer"):
+        lines.append(f"Direkte Antwort: {result['answer']}")
+    for i, r in enumerate(result["results"], start=1):
+        lines.append(f"{i}. {r['title']} — {r['snippet']} [{r['link']}]" + (f" ({r['date']})" if r["date"] else ""))
+    if not result["results"] and not result.get("answer"):
+        lines.append("(keine Ergebnisse)")
+    return "\n".join(lines)
+
+
+async def _run_standort_web_research(city_name: str, land: str, asset_class: str) -> str:
+    """Führt mehrere gezielte SerpApi-Suchen parallel aus und liefert einen kompakten,
+    formatierten Kontextblock mit den Rohtreffern zurück (leer, falls kein SERPAPI_KEY gesetzt ist)."""
+    if not has_valid_serpapi_key():
+        return ""
+
+    jahr = time.strftime("%Y")
+    queries = [
+        f"{city_name} Gewerbegrundstückspreise Industriegebiet {jahr}",
+        f"{city_name} Gewerbemiete Leerstand Büro Logistik {jahr}",
+        f"{city_name} Stromnetz Umspannwerk Kapazität Gewerbe Ansiedlung",
+        f"{city_name} Arbeitslosenquote Fachkräfte {jahr}",
+        f"{city_name} Wirtschaftsförderung Ansiedlung Gewerbegebiet Förderprogramm",
+    ]
+    asset_query = {
+        "datacenter": f"{city_name} Rechenzentrum Data Center Ansiedlung Strom {jahr}",
+        "logistik": f"{city_name} Logistikimmobilie Hallenmiete m2 {jahr}",
+        "parkhaus": f"{city_name} Parkhaus Parkplatz Bedarf Innenstadt",
+        "alle": f"{city_name} Gewerbeimmobilienmarkt {jahr} CBRE JLL Colliers",
+    }.get(asset_class, f"{city_name} Gewerbeimmobilienmarkt {jahr} CBRE JLL Colliers")
+    queries.append(asset_query)
+
+    try:
+        async with httpx.AsyncClient() as client:
+            results = await asyncio.gather(
+                *[_serpapi_web_search(client, q, num_results=5) for q in queries],
+                return_exceptions=True,
+            )
+    except Exception as exc:
+        logger.warning("Standort-Websuche insgesamt fehlgeschlagen: %s", exc)
+        return ""
+
+    blocks = []
+    for r in results:
+        if isinstance(r, Exception):
+            continue
+        formatted = _format_search_result_for_prompt(r)
+        if formatted:
+            blocks.append(formatted)
+    if not blocks:
+        return ""
+    return "\n\n".join(blocks)
+
+
+# ============================================================
 # STANDORTANALYSE-GENERATOR (Top-50-Städte-Sidebar → Button "Standortanalyse generieren")
 # Kennzahlenkatalog gem. 10-Punkte-Schema: Verkehr, Arbeitsmarkt, Energie/Infrastruktur,
 # Grundstück/Mikrostandort, Markt/Wettbewerb, Regulatorik, Risiken, ESG, Asset-Klasse-Spezifika, Fazit.
@@ -932,12 +1058,11 @@ STANDORT_ASSET_LABELS = {
     "datacenter": "Mega-Data-Center / Hyperscale-Rechenzentren",
 }
 
-# Groq "Compound"-Systeme (groq/compound, groq/compound-mini) sind agentische Modelle mit eingebauten
-# Tools — u.a. Web-Suche und Browser-Automatisierung (powered by Browser Use) sowie Code-Ausführung.
-# Sie rufen diese Tools bei Bedarf selbstständig auf und recherchieren so echte, aktuelle Daten im Web,
-# statt nur aus dem Trainingswissen zu antworten. Für die Standortanalyse daher bevorzugt genutzt;
-# als Reserve (falls Compound ausfällt/limitiert ist) die normale Text-Modell-Kette ohne Internetzugriff.
-STANDORT_MODEL_FALLBACK = ["groq/compound", "groq/compound-mini"] + GROQ_MODEL_FALLBACK
+# HINWEIS: groq/compound (eingebautes Browser-Use-Tool) wurde bewusst NICHT als Modell für die
+# Standortanalyse verwendet — es lieferte in der Praxis keine zuverlässige Live-Recherche. Stattdessen
+# läuft die Websuche jetzt explizit über SerpApi (_run_standort_web_research, s.o.) und wird dem
+# Modell als Kontext mitgegeben; die Textgenerierung nutzt die normale, bewährte Modell-Kette.
+STANDORT_MODEL_FALLBACK = GROQ_MODEL_FALLBACK
 
 STANDORT_SYSTEM_PROMPT = """Du bist ein Senior-Standortanalyst für gewerbliche Immobilienprojekte — von \
 Parkhäusern/Garagen über Logistikimmobilien bis zu Mega-Data-Centern (Hyperscale-Rechenzentren). Du erstellst \
@@ -949,19 +1074,18 @@ Antworte AUSSCHLIESSLICH mit dem fertigen Bericht als reiner Markdown-Light-Text
 oder danach, kein Code-Block, kein "Hier ist der Bericht:"). Nutze "## " für die 10 Hauptkategorien-Überschriften, \
 "**fett**" für Zwischenpunkte/Kennzahlennamen, "- " für Aufzählungen, Leerzeilen zwischen Absätzen.
 
-WICHTIG — Live-Recherche: Dir steht ein eingebautes Web-Recherche-/Browser-Werkzeug zur Verfügung. Nutze es \
-AKTIV, um für diesen Standort aktuelle, verifizierbare Daten zu ermitteln — insbesondere zu: Strompreisen/ \
-Netzentgelten und Umspannwerken/Interconnection-Timelines, Gewerbemietpreisen und Grundstückspreisen, \
-Leerstandsquoten und Marktreports (CBRE/JLL/Colliers/Savills), bekannten Logistik-/Data-Center-Ansiedlungen \
-und -Pipelines in der Region, kommunalen Förderprogrammen/Ansiedlungspolitik, sowie Arbeitslosenquote und \
-Lohnniveau (z.B. von Statistikämtern/Bundesagentur für Arbeit/BLS). Recherchiere für JEDE Kategorie, in der \
-sich konkrete, tagesaktuelle Zahlen finden lassen, bevor du schreibst — verlasse dich nicht nur auf \
-allgemeines Trainingswissen. Wo eine recherchierte Zahl in den Bericht einfließt, nenne die Quelle knapp in \
-Klammern (z.B. "(Quelle: destatis.de, 2026)" oder "(Quelle: CBRE Marktbericht)"). Nur wenn trotz Recherche \
-keine belastbare Zahl auffindbar ist, arbeite mit einer klar gekennzeichneten Einschätzung/Bandbreite \
-statt einer erfundenen Zahl (z.B. "überdurchschnittlich (Einschätzung, keine Primärquelle gefunden)"). \
-Erfinde niemals konkrete Firmennamen, Adressen oder Statistiken, die wie recherchierte Fakten wirken, ohne \
-sie tatsächlich recherchiert zu haben.
+WICHTIG — Live-Recherche: Im User-Prompt findest du unter "WEB-RECHERCHEERGEBNISSE" die Rohtreffer \
+mehrerer tagesaktueller Google-Suchen zu diesem Standort (Grundstückspreise, Gewerbemieten/Leerstand, \
+Stromnetz/Umspannwerke, Arbeitslosenquote, Wirtschaftsförderung sowie eine Asset-Klassen-spezifische Suche). \
+Werte diese Treffer aktiv aus und ziehe daraus konkrete, aktuelle Zahlen und Fakten für den Bericht — das \
+sind KEINE Trainingsdaten, sondern echte Live-Ergebnisse. Wo eine Zahl/Aussage aus einem Suchtreffer stammt, \
+nenne die Quelle knapp in Klammern (z.B. "(Quelle: destatis.de)" oder "(Quelle: CBRE Marktbericht)"). Falls \
+für "WEB-RECHERCHEERGEBNISSE" der Hinweis steht, dass keine Websuche verfügbar war, oder falls sich zu \
+einem konkreten Punkt darin nichts findet: arbeite stattdessen mit deinem Fachwissen, aber kennzeichne \
+diese Stellen klar als Einschätzung/Bandbreite (z.B. "überdurchschnittlich (Einschätzung, keine \
+Primärquelle gefunden)") statt eine erfundene Zahl als Fakt auszugeben. Erfinde niemals konkrete \
+Firmennamen, Adressen oder Statistiken, die wie recherchierte Fakten wirken, ohne dass sie tatsächlich \
+in den Suchergebnissen stehen.
 
 Der Bericht behandelt GENAU diese 10 Kategorien in dieser Reihenfolge, inkl. der jeweiligen Unterpunkte als \
 Aufzählung (jeder Unterpunkt mit einer kurzen, stadtbezogenen Einschätzung, nicht nur als Stichwort-Liste):
@@ -1075,7 +1199,7 @@ class StandortanalyseRequest(BaseModel):
     asset_class: str = "alle"
 
 
-def _build_standort_messages(payload: "StandortanalyseRequest") -> list[dict]:
+def _build_standort_messages(payload: "StandortanalyseRequest", web_research: str = "") -> list[dict]:
     asset_scope = STANDORT_ASSET_LABELS.get(payload.asset_class, STANDORT_ASSET_LABELS["alle"])
     system = STANDORT_SYSTEM_PROMPT.format(asset_scope=asset_scope)
 
@@ -1092,8 +1216,18 @@ def _build_standort_messages(payload: "StandortanalyseRequest") -> list[dict]:
     ]
     kontext = "\n".join(line for line in kontext_zeilen if line)
 
+    if web_research:
+        recherche_block = f"\n\nWEB-RECHERCHEERGEBNISSE (soeben live per Google-Suche abgerufen):\n{web_research}"
+    else:
+        recherche_block = (
+            "\n\nWEB-RECHERCHEERGEBNISSE: Keine Websuche verfügbar (kein SERPAPI_KEY konfiguriert oder "
+            "Suche fehlgeschlagen) — arbeite für diesen Bericht ausschließlich mit Fachwissen und "
+            "kennzeichne unsichere Zahlen klar als Einschätzung."
+        )
+
     user = (
-        f"Erstelle den vollständigen Standortanalyse-Bericht für folgende Stadt:\n\n{kontext}\n\n"
+        f"Erstelle den vollständigen Standortanalyse-Bericht für folgende Stadt:\n\n{kontext}"
+        f"{recherche_block}\n\n"
         f"Halte dich exakt an die 10 Kategorien und die Ausgaberegeln aus der Systemanweisung."
     )
     return [
@@ -1109,7 +1243,11 @@ async def generate_standortanalyse(payload: StandortanalyseRequest):
     if not GROQ_API_KEY:
         return JSONResponse({"error": "GROQ_API_KEY ist nicht konfiguriert."}, status_code=503)
 
-    messages = _build_standort_messages(payload)
+    land = "Deutschland" if (payload.country or "").upper() == "DE" else (payload.country or "unbekannt")
+    # Live-Websuche VOR dem Streaming ausführen, damit das Modell die Treffer als Kontext bekommt
+    # (SerpApi läuft mehrere Queries parallel, i.d.R. 2–4 Sekunden — daher etwas Anlaufzeit im Frontend).
+    web_research = await _run_standort_web_research(payload.name, land, payload.asset_class)
+    messages = _build_standort_messages(payload, web_research)
 
     async def token_stream():
         try:

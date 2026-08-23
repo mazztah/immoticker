@@ -79,7 +79,7 @@ Danach trägst du die Keys **direkt in der Cloud Run Konsole** ein (nicht über 
 [console.cloud.google.com/run](https://console.cloud.google.com/run) → Service `ki-immo-terminal`
 öffnen → **"Bearbeiten und neue Version bereitstellen"** → Tab **"Variablen & Secrets"** →
 Umgebungsvariablen hinzufügen: `GROQ_API_KEY`, `XAI_API_KEY`, `ANTHROPIC_API_KEY`,
-`FILIP_LINKEDIN_URL`, `FILIP_XING_URL` → **"Bereitstellen"**.
+`FILIP_LINKEDIN_URL`, `FILIP_XING_URL`, `SERPAPI_KEY` (optional, s.u.) → **"Bereitstellen"**.
 
 Die Befehle ohne Secrets stehen auch fertig zum Copy-Paste in `DEPLOY_COMMANDS.txt` (nicht committed).
 
@@ -87,7 +87,24 @@ Die Befehle ohne Secrets stehen auch fertig zum Copy-Paste in `DEPLOY_COMMANDS.t
 "Secrets" auf "Referenz hinzufügen" gehen und einen zuvor im Secret Manager angelegten Secret
 verknüpfen, statt eine normale Umgebungsvariable zu verwenden.
 
-## Feed-Datenbank
+## Standortanalyse & Live-Websuche (`SERPAPI_KEY`)
+
+Der Button **"Analyse"** in der Top-50-Städte-Sidebar generiert einen Standortbericht (10-Punkte-
+Kennzahlenkatalog). Für **echte, tagesaktuelle Zahlen** (Grundstückspreise, Gewerbemieten, Strom-
+netzkapazität, Arbeitslosenquote, Förderprogramme etc.) führt das Backend vor der Berichterstellung
+mehrere Google-Suchen über [SerpApi](https://serpapi.com) aus (`_run_standort_web_research` in `app.py`).
+
+- Umgebungsvariable `SERPAPI_KEY` setzen (Fly: `fly secrets set SERPAPI_KEY=dein_key`,
+  Cloud Run: siehe oben) — ein SerpApi-Konto/API-Key ist nötig (kostenpflichtig ab einem gewissen
+  Freikontingent, siehe serpapi.com/pricing).
+- **Ohne** `SERPAPI_KEY` funktioniert die Analyse weiterhin, dann aber ohne Live-Daten — das LLM
+  kennzeichnet unsichere Zahlen dann explizit als Einschätzung statt sie zu erfinden.
+- Bewusst **kein** `groq/compound` (Groqs Modell mit eingebautem Browser-Use-Tool) für diese Recherche
+  verwendet — dessen eingebaute Websuche war in der Praxis nicht zuverlässig nutzbar. Stattdessen
+  läuft dieselbe SerpApi-Anbindung wie im Schwesterprojekt (Telegram-Bot), die dort bereits produktiv
+  funktioniert.
+
+
 
 344 validierte Quellen in 7 Kategorien (`/api/feeds/meta` gibt die volle Liste zurück):
 
