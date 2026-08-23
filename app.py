@@ -809,6 +809,7 @@ def _groq_stream_worker(
     json_mode: bool = True,
 ):
     """Läuft in einem eigenen Thread, damit der blockierende Groq-Stream-Iterator den Event-Loop nicht blockiert."""
+    finish_reason = "stop"
     try:
         client = _get_groq_client()
         if json_mode:
@@ -844,19 +845,32 @@ def _groq_stream_worker(
         for chunk in stream:
             if not chunk.choices:
                 continue
-            delta = chunk.choices[0].delta.content
+            choice = chunk.choices[0]
+            delta = choice.delta.content
             if delta:
                 out_q.put(delta)
+            if getattr(choice, "finish_reason", None):
+                finish_reason = choice.finish_reason
     except Exception as exc:
         out_q.put(f"__ERROR__:{exc}")
     finally:
+        # Sentinel MIT Grund: 'length' bedeutet, die Antwort wurde durch max_tokens abgeschnitten
+        # (Aufrufer kann dann automatisch einen Fortsetzungs-Block anfordern statt abzubrechen).
+        out_q.put(f"__FINISH_REASON__:{finish_reason}")
         out_q.put(None)  # Sentinel: Stream fertig
 
 
 async def _stream_groq_single(
-    messages: list[dict], model: str, max_tokens: int, temperature: float, json_mode: bool = True
+    messages: list[dict],
+    model: str,
+    max_tokens: int,
+    temperature: float,
+    json_mode: bool = True,
+    result_holder: dict | None = None,
 ):
-    """Async-Generator für EIN Modell. Wirft RuntimeError bei Fehlschlag (z.B. Modell nicht verfügbar)."""
+    """Async-Generator für EIN Modell. Wirft RuntimeError bei Fehlschlag (z.B. Modell nicht verfügbar).
+    Falls result_holder übergeben wird, landet darin nach Abschluss der Grund 'finish_reason'
+    ('stop' = fertig, 'length' = durch max_tokens abgeschnitten)."""
     out_q: "queue.Queue" = queue.Queue()
     thread = threading.Thread(
         target=_groq_stream_worker, args=(messages, model, max_tokens, temperature, out_q, json_mode), daemon=True
@@ -869,6 +883,10 @@ async def _stream_groq_single(
             break
         if isinstance(chunk, str) and chunk.startswith("__ERROR__:"):
             raise RuntimeError(chunk[len("__ERROR__:"):])
+        if isinstance(chunk, str) and chunk.startswith("__FINISH_REASON__:"):
+            if result_holder is not None:
+                result_holder["finish_reason"] = chunk[len("__FINISH_REASON__:"):]
+            continue
         yield chunk
 
 
@@ -878,6 +896,7 @@ async def _stream_groq(
     temperature: float = 0.7,
     model_fallback: list[str] | None = None,
     json_mode: bool = True,
+    result_holder: dict | None = None,
 ):
     """Async-Generator mit Modell-Fallback-Kette (analog zu _call_groq): schlägt ein Modell fehl,
     BEVOR bereits Text gestreamt wurde (z.B. 404 model_not_found, decommissioned, rate limit),
@@ -889,7 +908,9 @@ async def _stream_groq(
     for model_name in models:
         started_output = False
         try:
-            async for chunk in _stream_groq_single(messages, model_name, max_tokens, temperature, json_mode):
+            async for chunk in _stream_groq_single(
+                messages, model_name, max_tokens, temperature, json_mode, result_holder
+            ):
                 started_output = True
                 yield chunk
             return  # Modell erfolgreich durchgelaufen
@@ -989,22 +1010,29 @@ async def _serpapi_web_search(
         return {"success": False, "error": str(exc)[:200], "query": query, "results": []}
 
 
-def _format_search_result_for_prompt(result: dict) -> str:
+def _format_search_result_for_prompt(result: dict, max_results: int = 3, snippet_len: int = 130) -> str:
+    """Kompakte Formatierung — bewusst knapp gehalten (max_results/snippet_len), da der komplette
+    Recherche-Block als Prompt-Kontext ins Token-Budget (TPM-Limit) einfließt."""
     if not result.get("success"):
         return f'Suche "{result.get("query", "")}": fehlgeschlagen ({result.get("error", "unbekannt")})'
-    lines = [f'Web-Suchergebnisse für: "{result["query"]}"']
+    lines = [f'Suche "{result["query"]}":']
     if result.get("answer"):
-        lines.append(f"Direkte Antwort: {result['answer']}")
-    for i, r in enumerate(result["results"], start=1):
-        lines.append(f"{i}. {r['title']} — {r['snippet']} [{r['link']}]" + (f" ({r['date']})" if r["date"] else ""))
+        answer = str(result["answer"])[:180]
+        lines.append(f"Direkt: {answer}")
+    for i, r in enumerate(result["results"][:max_results], start=1):
+        snippet = (r["snippet"] or "")[:snippet_len]
+        title = (r["title"] or "")[:70]
+        lines.append(f"{i}. {title} — {snippet} [{r['link']}]")
     if not result["results"] and not result.get("answer"):
         lines.append("(keine Ergebnisse)")
     return "\n".join(lines)
 
 
-async def _run_standort_web_research(city_name: str, land: str, asset_class: str) -> str:
+async def _run_standort_web_research(city_name: str, land: str, asset_class: str, max_chars: int = 2600) -> str:
     """Führt mehrere gezielte SerpApi-Suchen parallel aus und liefert einen kompakten,
-    formatierten Kontextblock mit den Rohtreffern zurück (leer, falls kein SERPAPI_KEY gesetzt ist)."""
+    formatierten Kontextblock mit den Rohtreffern zurück (leer, falls kein SERPAPI_KEY gesetzt ist).
+    max_chars deckelt den Gesamtblock hart, damit er zusammen mit dem restlichen Prompt nicht das
+    Groq-TPM-Limit sprengt (siehe generate_standortanalyse)."""
     if not has_valid_serpapi_key():
         return ""
 
@@ -1027,7 +1055,7 @@ async def _run_standort_web_research(city_name: str, land: str, asset_class: str
     try:
         async with httpx.AsyncClient() as client:
             results = await asyncio.gather(
-                *[_serpapi_web_search(client, q, num_results=5) for q in queries],
+                *[_serpapi_web_search(client, q, num_results=4) for q in queries],
                 return_exceptions=True,
             )
     except Exception as exc:
@@ -1043,7 +1071,10 @@ async def _run_standort_web_research(city_name: str, land: str, asset_class: str
             blocks.append(formatted)
     if not blocks:
         return ""
-    return "\n\n".join(blocks)
+    combined = "\n\n".join(blocks)
+    if len(combined) > max_chars:
+        combined = combined[:max_chars].rsplit("\n", 1)[0] + "\n[…gekürzt, Token-Budget]"
+    return combined
 
 
 # ============================================================
@@ -1236,6 +1267,82 @@ def _build_standort_messages(payload: "StandortanalyseRequest", web_research: st
     ]
 
 
+def _estimate_tokens(text: str) -> int:
+    """Grobe, bewusst konservative (eher überschätzende) Token-Schätzung für die TPM-Budgetplanung —
+    kein echter Tokenizer nötig, da wir nur sicher UNTER dem Groq-Limit bleiben müssen."""
+    return max(1, len(text) // 3)
+
+
+# Groq TPM-Limit (Tokens pro Minute) für den aktuellen "on_demand"-Tier lag beim Auftreten des Fehlers
+# bei 8000 Tokens PRO REQUEST (Prompt + max_tokens zusammen). STANDORT_TPM_BUDGET bleibt bewusst darunter,
+# damit auch bei leicht abweichender Tokenisierung/anderen Modellen genug Sicherheitsabstand bleibt.
+STANDORT_TPM_BUDGET = 7500
+STANDORT_BLOCK_MIN_TOKENS = 700
+STANDORT_BLOCK_MAX_TOKENS = 3000
+STANDORT_MAX_BLOCKS = 5
+
+STANDORT_CONTINUE_SYSTEM = """Du schreibst einen mehrteiligen, deutschen Standortanalyse-Bericht (Markdown-Light) \
+für {asset_scope} in {stadt}. Unten steht das bisherige Berichtsende. Setze NAHTLOS exakt dort fort, wo der \
+Text aufhört — keine Wiederholung, kein neuer Vorspann, keine erneute Überschrift für einen bereits \
+behandelten Abschnitt. Endet der bisherige Text mitten im Satz oder mitten in einer Aufzählung, vervollständige \
+zunächst diesen Satz/Punkt, dann weiter im Text. Halte dich weiterhin an die 10-Kategorien-Struktur \
+("## "-Überschriften), an Markdown-Light-Regeln und daran, am Ende von Kategorie 10 mit einem \
+"**Quellen:**"-Abschnitt abzuschließen (nur falls dort tatsächlich recherchierte Quellen genannt wurden)."""
+
+
+async def _generate_standort_report_blocks(messages_base: list[dict], asset_scope: str, stadt: str):
+    """Streamt den Standortanalyse-Bericht blockweise statt in einem einzigen großen Request, um das
+    Groq-TPM-Limit (Tokens pro Minute, Prompt+max_tokens zusammen) sicher einzuhalten. Jeder Block bekommt
+    ein anhand des tatsächlichen Prompt-Umfangs dynamisch berechnetes max_tokens-Budget. Wird eine Antwort
+    durch max_tokens abgeschnitten (finish_reason == 'length'), wird automatisch ein kompakter
+    Fortsetzungs-Block angefordert — mit stark verkürztem Kontext (nur Berichtsende + kurze Anweisung statt
+    des kompletten Ursprungs-Prompts inkl. Recherche), damit auch spätere Blöcke klar unter dem Limit bleiben."""
+    accumulated = ""
+    current_messages = list(messages_base)
+
+    for block_index in range(STANDORT_MAX_BLOCKS):
+        prompt_tokens_estimate = sum(_estimate_tokens(m["content"]) for m in current_messages)
+        budget = STANDORT_TPM_BUDGET - prompt_tokens_estimate - 200  # Sicherheitspuffer
+        block_max_tokens = max(STANDORT_BLOCK_MIN_TOKENS, min(STANDORT_BLOCK_MAX_TOKENS, budget))
+        if budget < STANDORT_BLOCK_MIN_TOKENS:
+            logger.warning(
+                "Standortanalyse Block %s: Prompt bereits ~%s Tokens geschätzt, Budget knapp (%s)",
+                block_index + 1, prompt_tokens_estimate, budget,
+            )
+
+        result_holder: dict = {}
+        try:
+            async for chunk in _stream_groq(
+                current_messages,
+                max_tokens=block_max_tokens,
+                temperature=0.5,
+                model_fallback=STANDORT_MODEL_FALLBACK,
+                json_mode=False,
+                result_holder=result_holder,
+            ):
+                accumulated += chunk
+                yield chunk
+        except Exception as exc:
+            logger.exception("Standortanalyse Block %s fehlgeschlagen", block_index + 1)
+            yield f"\n\n_(Bericht nach Block {block_index + 1} wegen eines Fehlers abgebrochen: {exc})_"
+            return
+
+        finish_reason = result_holder.get("finish_reason", "stop")
+        if finish_reason != "length":
+            return  # Bericht ist fertig — sauber durch das Modell selbst beendet
+
+        # Abgeschnitten -> kompakten Fortsetzungs-Block vorbereiten. WICHTIG: hier NICHT den kompletten
+        # Ursprungs-Prompt (System + Recherche) erneut mitschicken, sonst würde jeder weitere Block wieder
+        # groß werden und erneut ans TPM-Limit stoßen.
+        tail = accumulated[-900:]
+        current_messages = [
+            {"role": "system", "content": STANDORT_CONTINUE_SYSTEM.format(asset_scope=asset_scope, stadt=stadt)},
+            {"role": "user", "content": f"Bisheriges Berichtsende:\n\n…{tail}\n\nSetze hier nahtlos fort:"},
+        ]
+
+    yield "\n\n_(Maximale Anzahl an Fortsetzungs-Blöcken erreicht — Bericht könnte unvollständig sein.)_"
+
+
 @app.post("/api/standortanalyse")
 async def generate_standortanalyse(payload: StandortanalyseRequest):
     if not payload.name:
@@ -1248,12 +1355,11 @@ async def generate_standortanalyse(payload: StandortanalyseRequest):
     # (SerpApi läuft mehrere Queries parallel, i.d.R. 2–4 Sekunden — daher etwas Anlaufzeit im Frontend).
     web_research = await _run_standort_web_research(payload.name, land, payload.asset_class)
     messages = _build_standort_messages(payload, web_research)
+    asset_scope = STANDORT_ASSET_LABELS.get(payload.asset_class, STANDORT_ASSET_LABELS["alle"])
 
     async def token_stream():
         try:
-            async for chunk in _stream_groq(
-                messages, max_tokens=5000, temperature=0.5, model_fallback=STANDORT_MODEL_FALLBACK, json_mode=False
-            ):
+            async for chunk in _generate_standort_report_blocks(messages, asset_scope, payload.name):
                 yield chunk
         except Exception as exc:
             logger.exception("Fehler beim Standortanalyse-Streaming")
