@@ -2,7 +2,10 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5">
+    <meta name="theme-color" content="#1a1433">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>KI • IMMO TERMINAL — Responsive News Ticker Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -194,18 +197,95 @@
         .top50-table tr:hover {
             background-color: #111827;
         }
+
+        /* ===== Mobile / Android optimization: Top-50 drawer ===== */
+        #city-sidebar {
+            transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+        /* Mobile: off-canvas by default */
+        @media (max-width: 1279px) {
+            #city-sidebar {
+                transform: translateX(-100%);
+                width: min(20rem, 88vw);
+                max-width: 320px;
+                box-shadow: 8px 0 32px rgba(0,0,0,0.45);
+            }
+            #city-sidebar.mobile-open {
+                transform: translateX(0);
+            }
+        }
+        /* Desktop xl+: always visible, no transform */
+        @media (min-width: 1280px) {
+            #city-sidebar {
+                transform: none !important;
+            }
+        }
+        #city-sidebar-overlay {
+            transition: opacity 0.25s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #city-sidebar-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        /* Touch-friendly list items on mobile */
+        @media (max-width: 1279px) {
+            #city-list-container .city-row {
+                min-height: 52px;
+                padding-top: 12px;
+                padding-bottom: 12px;
+            }
+        }
+        /* Safe-area for notched Android / gesture nav */
+        @supports (padding: env(safe-area-inset-left)) {
+            #city-sidebar {
+                padding-left: env(safe-area-inset-left);
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+            nav {
+                padding-top: env(safe-area-inset-top);
+            }
+        }
+        /* Prevent body scroll when drawer open */
+        body.drawer-open {
+            overflow: hidden;
+            touch-action: none;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(124, 58, 237, 0.35);
+            border-radius: 999px;
+        }
     </style>
 </head>
 <body class="text-zinc-200" style="background: linear-gradient(155deg, #1a1433 0%, #0f172a 45%, #0a0e1a 100%); background-attachment: fixed;">
-    <!-- LEFT SIDEBAR: Top 50 Städte nach Kaufkraft (bis Straßenebene) -->
-    <div class="hidden xl:flex fixed left-0 top-0 bottom-0 w-80 bg-white/[0.06] backdrop-blur-xl border-r border-white/10 z-40 flex-col overflow-hidden">
+    <!-- Mobile overlay for city drawer -->
+    <div id="city-sidebar-overlay" class="hidden fixed inset-0 bg-black/60 z-[55] xl:hidden" onclick="closeCityDrawer()" aria-hidden="true"></div>
+
+    <!-- LEFT SIDEBAR: Top 50 Städte nach Kaufkraft (bis Straßenebene) — Desktop always visible, Mobile as drawer -->
+    <div id="city-sidebar" class="fixed left-0 top-0 bottom-0 w-80 bg-[#0f0a1a]/95 backdrop-blur-xl border-r border-white/10 z-[60] flex flex-col overflow-hidden xl:bg-white/[0.06]">
         <div class="p-5 border-b border-white/10 flex-shrink-0">
-            <div class="flex items-center gap-x-3 mb-1">
-                <i class="fa-solid fa-city text-violet-400 text-xl"></i>
-                <div>
-                    <div class="font-bold text-lg tracking-tight">Top 50 Städte</div>
-                    <div class="text-violet-400 text-xs font-mono">NACH KAUFKRAFT 2026 • DE + USA</div>
+            <div class="flex items-center justify-between gap-x-3 mb-1">
+                <div class="flex items-center gap-x-3 min-w-0">
+                    <i class="fa-solid fa-city text-violet-400 text-xl flex-shrink-0"></i>
+                    <div class="min-w-0">
+                        <div class="font-bold text-lg tracking-tight">Top 50 Städte</div>
+                        <div class="text-violet-400 text-xs font-mono">NACH KAUFKRAFT 2026 • DE + USA</div>
+                    </div>
                 </div>
+                <!-- Close button (mobile only) -->
+                <button type="button" onclick="closeCityDrawer()" 
+                        class="xl:hidden flex-shrink-0 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 flex items-center justify-center text-zinc-300 active:scale-95 transition"
+                        aria-label="Schließen">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
             </div>
             <div class="text-[10px] text-zinc-500">bis auf Straßenebene • KI-gestützte Immobilien-Insights</div>
             
@@ -213,8 +293,10 @@
             <div class="mt-4 relative">
                 <input id="city-search" type="text" placeholder="Stadt oder Viertel suchen..." 
                        onkeyup="filterCityList()"
-                       class="w-full bg-black/30 backdrop-blur-md border border-white/15 focus:border-violet-600 text-sm px-4 py-2.5 rounded-2xl placeholder:text-zinc-500">
-                <i class="fa-solid fa-search absolute right-4 top-3.5 text-zinc-600 text-sm"></i>
+                       inputmode="search"
+                       autocomplete="off"
+                       class="w-full bg-black/30 backdrop-blur-md border border-white/15 focus:border-violet-600 text-sm px-4 py-3 rounded-2xl placeholder:text-zinc-500">
+                <i class="fa-solid fa-search absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 text-sm pointer-events-none"></i>
             </div>
         </div>
         
@@ -234,14 +316,21 @@
     <!-- NAV -->
     <nav class="sticky top-0 z-50 bg-black/30 backdrop-blur-md/95 backdrop-blur-lg border-b border-white/10">
         <div class="max-w-screen-2xl mx-auto">
-            <div class="px-6 py-4 flex items-center justify-between">
-                <div class="flex items-center gap-x-3">
-                    <div class="w-11 h-11 bg-violet-950 border border-violet-600 rounded-xl flex items-center justify-center">
-                        <i class="fa-solid fa-terminal text-violet-400 text-3xl"></i>
+            <div class="px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-x-2">
+                <div class="flex items-center gap-x-2 sm:gap-x-3 min-w-0">
+                    <!-- Mobile: open Top-50 drawer -->
+                    <button type="button" onclick="openCityDrawer()" 
+                            class="xl:hidden flex-shrink-0 w-11 h-11 rounded-xl bg-violet-950 border border-violet-600 flex items-center justify-center active:scale-95 transition"
+                            aria-label="Top 50 Städte öffnen"
+                            title="Top 50 Städte">
+                        <i class="fa-solid fa-city text-violet-400 text-lg"></i>
+                    </button>
+                    <div class="w-10 h-10 sm:w-11 sm:h-11 bg-violet-950 border border-violet-600 rounded-xl flex items-center justify-center flex-shrink-0 hidden xl:flex">
+                        <i class="fa-solid fa-terminal text-violet-400 text-2xl sm:text-3xl"></i>
                     </div>
-                    <div>
-                        <span class="font-bold text-3xl tracking-tighter terminal-font">KI•IMMO</span>
-                        <span class="font-semibold text-violet-400 text-xl">TERMINAL</span>
+                    <div class="min-w-0">
+                        <span class="font-bold text-xl sm:text-3xl tracking-tighter terminal-font">KI•IMMO</span>
+                        <span class="font-semibold text-violet-400 text-base sm:text-xl">TERMINAL</span>
                     </div>
                 </div>
                 
@@ -259,13 +348,19 @@
                     </a>
                 </div>
                 
-                <div class="flex items-center gap-x-3">
+                <div class="flex items-center gap-x-2 sm:gap-x-3 flex-shrink-0">
                     <div class="hidden sm:flex items-center bg-white/[0.05] backdrop-blur-xl border border-white/10 rounded-2xl px-3 py-1.5 text-xs">
                         <div class="w-2 h-2 bg-violet-400 rounded-full animate-pulse mr-2"></div>
                         <span class="text-violet-400 font-mono">LIVE 2026</span>
                     </div>
+                    <!-- Mobile: compact Top-50 label next to icon if needed; primary is left button -->
+                    <button type="button" onclick="openCityDrawer()" 
+                            class="xl:hidden flex items-center gap-x-1.5 px-3 py-2 bg-violet-600/90 hover:bg-violet-500 active:scale-95 border border-violet-500/50 rounded-2xl text-xs font-semibold transition">
+                        <i class="fa-solid fa-list-ol"></i>
+                        <span>Top 50</span>
+                    </button>
                     <button onclick="copyAllRSS()" 
-                            class="flex items-center gap-x-2 px-4 py-2 bg-white/[0.06] backdrop-blur-xl hover:bg-zinc-800 border border-white/15 hover:border-violet-600 transition-all rounded-2xl text-sm font-medium">
+                            class="flex items-center gap-x-2 px-3 sm:px-4 py-2 bg-white/[0.06] backdrop-blur-xl hover:bg-zinc-800 border border-white/15 hover:border-violet-600 transition-all rounded-2xl text-sm font-medium active:scale-95">
                         <i class="fa-solid fa-copy"></i>
                         <span class="hidden md:inline">Alle Links kopieren</span>
                     </button>
@@ -275,15 +370,15 @@
     </nav>
 
     <!-- HERO / TERMINAL TICKER -->
-    <div id="ticker" class="max-w-screen-2xl mx-auto px-6 pt-8 pb-6">
+    <div id="ticker" class="max-w-screen-2xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-6">
         <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-y-4 mb-6">
             <div>
-                <div class="flex items-center gap-x-3 mb-2">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
                     <div class="px-3 py-1 bg-violet-950 text-violet-400 text-xs font-mono tracking-[2px] rounded border border-violet-900">CLASSIFIED INTEL</div>
                     <div class="text-xs text-zinc-500">• UPDATES EVERY 47 SECONDS</div>
                 </div>
-                <h1 class="text-6xl lg:text-7xl font-display tracking-tighter gradient-text-shift">TERMINAL<br>NEWS TICKER</h1>
-                <p class="text-xl text-zinc-400 mt-2 max-w-md">Feinste CSS-Animationen • KI &amp; Immobilien • Deutschland + Amerika • Top Influencer &amp; Labs</p>
+                <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-display tracking-tighter gradient-text-shift">TERMINAL<br>NEWS TICKER</h1>
+                <p class="text-base sm:text-xl text-zinc-400 mt-2 max-w-md">Feinste CSS-Animationen • KI &amp; Immobilien • Deutschland + Amerika • Top Influencer &amp; Labs</p>
             </div>
             
             <div class="flex items-center gap-x-3">
@@ -682,26 +777,26 @@
     </footer>
 
     <!-- MODAL -->
-    <div id="modal" onclick="if (event.target.id === 'modal') closeModal()" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6">
-        <div onclick="event.stopImmediatePropagation()" class="modal bg-white/[0.06] backdrop-blur-xl border border-violet-800 rounded-3xl max-w-lg w-full p-8 terminal-window">
-            <div class="flex justify-between items-start mb-5">
-                <div>
+    <div id="modal" onclick="if (event.target.id === 'modal') closeModal()" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-y-auto">
+        <div onclick="event.stopImmediatePropagation()" class="modal bg-[#0f0a1a]/95 sm:bg-white/[0.06] backdrop-blur-xl border border-violet-800 rounded-t-3xl sm:rounded-3xl max-w-lg w-full max-h-[92vh] overflow-y-auto p-5 sm:p-8 terminal-window">
+            <div class="flex justify-between items-start mb-5 gap-x-3">
+                <div class="min-w-0">
                     <div id="modal-category" class="category-pill text-xs mb-2"></div>
-                    <h3 id="modal-title" class="text-2xl font-semibold"></h3>
+                    <h3 id="modal-title" class="text-xl sm:text-2xl font-semibold"></h3>
                 </div>
-                <button onclick="closeModal()" class="text-zinc-400 hover:text-white text-2xl leading-none">×</button>
+                <button onclick="closeModal()" class="text-zinc-400 hover:text-white text-2xl leading-none flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl active:bg-white/10" aria-label="Schließen">×</button>
             </div>
             
             <div id="modal-desc" class="text-zinc-300 text-[15px] leading-relaxed mb-6"></div>
             
-            <div class="flex items-center gap-x-3">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <button onclick="copyModalRSS()" 
-                        class="flex-1 py-3 bg-violet-600 hover:bg-violet-500 rounded-2xl font-semibold flex items-center justify-center gap-x-2">
+                        class="flex-1 py-3.5 sm:py-3 bg-violet-600 hover:bg-violet-500 rounded-2xl font-semibold flex items-center justify-center gap-x-2 active:scale-[0.98]">
                     <i class="fa-solid fa-copy"></i>
                     <span>RSS-Link kopieren</span>
                 </button>
                 <button onclick="closeModal()" 
-                        class="flex-1 py-3 border border-white/15 hover:bg-zinc-800 rounded-2xl font-medium">Schließen</button>
+                        class="flex-1 py-3.5 sm:py-3 border border-white/15 hover:bg-zinc-800 rounded-2xl font-medium active:scale-[0.98]">Schließen</button>
             </div>
             
             <div class="mt-5 text-[10px] text-center text-violet-700 font-mono">Diese Demo zeigt simulierte Headlines. Für echte News: RSS-Reader verwenden.</div>
@@ -1661,6 +1756,62 @@
             { rank: 50, name: "Erfurt", country: "DE", kaufkraft: 97, median: "26.900 €", type: "Großstadt", insight: "Thüringen • Schöne Altstadt • Gutes Preis-Leistungs-Verhältnis" }
         ];
         
+        // ===== Mobile Top-50 drawer controls (Android-optimized) =====
+        function openCityDrawer() {
+            const sidebar = document.getElementById('city-sidebar');
+            const overlay = document.getElementById('city-sidebar-overlay');
+            if (!sidebar) return;
+            sidebar.classList.add('mobile-open');
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                overlay.setAttribute('aria-hidden', 'false');
+            }
+            document.body.classList.add('drawer-open');
+            // Focus search for quick filter on mobile
+            const search = document.getElementById('city-search');
+            if (search && window.innerWidth < 1280) {
+                setTimeout(() => search.focus(), 280);
+            }
+        }
+        function closeCityDrawer() {
+            const sidebar = document.getElementById('city-sidebar');
+            const overlay = document.getElementById('city-sidebar-overlay');
+            if (sidebar) sidebar.classList.remove('mobile-open');
+            if (overlay) {
+                overlay.classList.add('hidden');
+                overlay.setAttribute('aria-hidden', 'true');
+            }
+            document.body.classList.remove('drawer-open');
+        }
+        // Close drawer on Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeCityDrawer();
+        });
+        // Optional: swipe-right-to-close on drawer (basic touch)
+        (function initCityDrawerSwipe() {
+            const sidebar = document.getElementById('city-sidebar');
+            if (!sidebar) return;
+            let startX = 0, currentX = 0, tracking = false;
+            sidebar.addEventListener('touchstart', function(e) {
+                if (window.innerWidth >= 1280) return;
+                if (!sidebar.classList.contains('mobile-open')) return;
+                startX = e.touches[0].clientX;
+                currentX = startX;
+                tracking = true;
+            }, { passive: true });
+            sidebar.addEventListener('touchmove', function(e) {
+                if (!tracking) return;
+                currentX = e.touches[0].clientX;
+            }, { passive: true });
+            sidebar.addEventListener('touchend', function() {
+                if (!tracking) return;
+                tracking = false;
+                const dx = currentX - startX;
+                // Swipe left (close) if moved enough
+                if (dx < -60) closeCityDrawer();
+            }, { passive: true });
+        })();
+
         // Render the city list in sidebar
         function renderCityList(filteredCities = null) {
             const container = document.getElementById('city-list-container');
@@ -1676,7 +1827,7 @@
                 
                 return `
                     <div onclick="showCityDetailModal(${city.rank})" 
-                         class="group flex items-center justify-between px-3 py-2.5 mb-1 rounded-2xl hover:bg-zinc-800 cursor-pointer transition-all border border-transparent hover:border-violet-900">
+                         class="city-row group flex items-center justify-between px-3 py-2.5 mb-1 rounded-2xl hover:bg-zinc-800 active:bg-zinc-800/80 cursor-pointer transition-all border border-transparent hover:border-violet-900">
                         <div class="flex items-center gap-x-3 min-w-0">
                             <div class="w-6 text-right font-mono text-violet-700 text-xs flex-shrink-0">${String(city.rank).padStart(2,'0')}</div>
                             <div class="min-w-0">
@@ -1697,21 +1848,25 @@
         }
         
         function filterCityList() {
-            const search = document.getElementById('city-search').value.toLowerCase().trim();
-            if (!search) {
+            const search = document.getElementById('city-search');
+            if (!search) return;
+            const q = search.value.toLowerCase().trim();
+            if (!q) {
                 renderCityList();
                 return;
             }
             
             const filtered = topCities.filter(city => 
-                city.name.toLowerCase().includes(search) ||
-                (city.insight && city.insight.toLowerCase().includes(search))
+                city.name.toLowerCase().includes(q) ||
+                (city.insight && city.insight.toLowerCase().includes(q))
             );
             renderCityList(filtered);
         }
         
         // City Detail Modal with street-level drill-down
         function showCityDetailModal(rank) {
+            // On mobile: close drawer so modal is fully visible
+            if (window.innerWidth < 1280) closeCityDrawer();
             const city = topCities.find(c => c.rank === rank);
             if (!city) return;
             
@@ -1798,7 +1953,7 @@
                             <i class="fa-solid fa-wand-magic-sparkles"></i>
                             <span>Analyse</span>
                         </button>
-                        <div class="text-[10px] text-violet-700 mt-1.5">10-Punkte-Kennzahlenkatalog mit Live-Internetrecherche (Browser-Use) für aktuelle Zahlen: Verkehr, Arbeitsmarkt, Energie, Grundstück, Markt, Regulatorik, Risiken, ESG, Asset-Klasse, Fazit.</div>
+                        <div class="text-[10px] text-violet-700 mt-1.5">10-Punkte-Kennzahlenkatalog mit Live-Google-Suche für aktuelle Zahlen: Verkehr, Arbeitsmarkt, Energie, Grundstück, Markt, Regulatorik, Risiken, ESG, Asset-Klasse, Fazit.</div>
                     </div>
                 </div>
             `;
