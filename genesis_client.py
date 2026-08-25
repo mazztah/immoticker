@@ -28,6 +28,16 @@ GENESIS_API_KEY = os.getenv("GENESIS_API_KEY")
 
 _HTTP_TIMEOUT = httpx.Timeout(25.0, connect=10.0)
 
+# Ohne einen browser-ähnlichen User-Agent leitet der GENESIS-Reverse-Proxy
+# API-Requests teils auf die Web-Oberfläche (HTML-SPA) statt auf die JSON-API
+# um (beobachtet: 302 -> /datenbank/online/announcement). Explizite Header
+# beugen dem vor.
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+}
+
 
 def has_genesis_key() -> bool:
     return bool(GENESIS_API_KEY)
@@ -48,15 +58,25 @@ async def _get_json(path: str, params: dict[str, Any]) -> dict:
     query = {**_auth_params(), "language": "de"}
     query.update({k: v for k, v in params.items() if v not in (None, "")})
     url = f"{GENESIS_BASE}/{path}"
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True, headers=_HEADERS) as client:
         resp = await client.get(url, params=query)
         resp.raise_for_status()
+        content_type = resp.headers.get("content-type", "")
+        if "json" not in content_type:
+            # Wurde (z.B. wegen Bot-Erkennung oder abgelaufenem Token) auf die
+            # HTML-Weboberfläche statt auf die JSON-API umgeleitet.
+            log.warning("GENESIS lieferte kein JSON zurück (%s), Endpunkt: %s", content_type, resp.url)
+            raise GenesisError(
+                f"GENESIS hat statt JSON-Daten eine Webseite geliefert (evtl. Wartung, "
+                f"Bot-Schutz oder ungültiger/abgelaufener Token). Antwort kam von: {resp.url}"
+            )
         data = resp.json()
     status = data.get("Status", {})
     # Code 0 = erfolgreich, Warnungen (z.B. Code 22) liefern trotzdem Daten.
     if status.get("Type") == "Error":
         raise GenesisError(status.get("Content", "Unbekannter GENESIS-Fehler"))
     return data
+
 
 
 async def logincheck() -> dict:
@@ -150,17 +170,21 @@ async def chart_png(
     if endyear:
         query["endyear"] = endyear
     url = f"{GENESIS_BASE}/data/chart2table"
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True, headers=_HEADERS) as client:
         resp = await client.get(url, params=query)
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
         if "image" not in content_type:
-            # GENESIS liefert bei Fehlern JSON statt PNG (z.B. ungültiger Code).
+            # GENESIS liefert bei Fehlern JSON statt PNG (z.B. ungültiger Code),
+            # oder -- bei Bot-Schutz/abgelaufenem Token -- HTML der Weboberfläche.
             try:
                 err = resp.json()
                 msg = err.get("Status", {}).get("Content", "Diagramm nicht verfügbar")
             except Exception:
-                msg = "Diagramm nicht verfügbar"
+                if "html" in content_type:
+                    msg = f"GENESIS hat eine Webseite statt eines Diagramms geliefert (Antwort von: {resp.url})"
+                else:
+                    msg = "Diagramm nicht verfügbar"
             raise GenesisError(msg)
         return resp.content
 
