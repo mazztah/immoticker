@@ -33,6 +33,7 @@ GENESIS_USERNAME = os.getenv("GENESIS_USERNAME")
 GENESIS_PASSWORD = os.getenv("GENESIS_PASSWORD")
 
 _HTTP_TIMEOUT = httpx.Timeout(25.0, connect=10.0)
+_REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 
 # Ohne einen browser-ähnlichen User-Agent leitet der GENESIS-Reverse-Proxy
 # API-Requests teils auf die Web-Oberfläche (HTML-SPA) statt auf die JSON-API
@@ -93,14 +94,14 @@ async def _get_json(path: str, params: dict[str, Any]) -> dict:
         resp = None
         for base in bases:
             resp = await client.get(f"{base}/{path}", params=query)
-            if resp.status_code not in {301, 302, 303, 307, 308}:
+            if resp.status_code not in _REDIRECT_STATUS_CODES:
                 break
             log.warning(
                 "GENESIS leitete API-Request um (%s -> %s)",
                 _safe_url(resp.url),
                 _safe_url(resp.headers.get("location", "")),
             )
-        if resp is None or resp.status_code in {301, 302, 303, 307, 308}:
+        if resp is None or resp.status_code in _REDIRECT_STATUS_CODES:
             raise GenesisError(
                 "GENESIS hat den API-Aufruf auf die Web-Oberfläche umgeleitet. "
                 "Bitte GENESIS_API_KEY prüfen oder später erneut versuchen."
@@ -256,14 +257,14 @@ async def chart_png(
         resp = None
         for base in bases:
             resp = await client.get(f"{base}/data/chart2table", params=query)
-            if resp.status_code not in {301, 302, 303, 307, 308}:
+            if resp.status_code not in _REDIRECT_STATUS_CODES:
                 break
             log.warning(
                 "GENESIS leitete Chart-Request um (%s -> %s)",
                 _safe_url(resp.url),
                 _safe_url(resp.headers.get("location", "")),
             )
-        if resp is None or resp.status_code in {301, 302, 303, 307, 308}:
+        if resp is None or resp.status_code in _REDIRECT_STATUS_CODES:
             raise GenesisError("GENESIS hat den Diagramm-Aufruf auf die Web-Oberfläche umgeleitet.")
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
