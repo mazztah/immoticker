@@ -342,6 +342,7 @@
                     <a href="#re-de" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Immobilien DE</a>
                     <a href="#inv" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Investoren</a>
                     <a href="#dev" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Dev</a>
+                    <a href="#gespeicherte-analysen" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Analysen</a>
                     <a href="#statistik" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Statistik</a>
                     <a href="#top50" class="px-5 py-2 bg-violet-600 hover:bg-violet-500 transition-all text-white rounded-2xl font-semibold flex items-center gap-x-2 text-sm">
                         <i class="fa-solid fa-rss"></i>
@@ -701,6 +702,24 @@
         <div id="dev-body">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="dev-grid">
                 <!-- Live geladen -->
+            </div>
+        </div>
+    </div>
+
+    <!-- GESPEICHERTE STANDORTANALYSEN (lokal im Browser, überlebt Reload/Server-Neustart) -->
+    <div id="gespeicherte-analysen" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-end justify-between mb-6 cursor-pointer" onclick="toggleSection('gespeicherte-analysen')">
+            <div>
+                <span class="category-pill ai-de text-sm px-4 py-1">GESPEICHERT</span>
+                <h2 class="text-4xl font-display tracking-tight mt-1">Standortanalysen</h2>
+                <p class="text-zinc-400">Einmal erstellte Berichte bleiben hier erhalten — lokal in diesem Browser gespeichert, auch nach Neuladen der Seite. <span id="standort-reports-count" class="text-violet-500"></span></p>
+            </div>
+            <i id="gespeicherte-analysen-chevron" class="fa-solid fa-chevron-down text-violet-600 text-xl transition-transform"></i>
+        </div>
+
+        <div id="gespeicherte-analysen-body">
+            <div id="standort-reports-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div class="text-zinc-500 text-sm">Noch keine Standortanalysen erstellt. Öffne „Top 50 Städte" und starte eine Analyse.</div>
             </div>
         </div>
     </div>
@@ -2139,6 +2158,93 @@
         // ============================================
         let lastStandortReportText = '';
 
+        // ============================================================
+        // Standortanalysen lokal persistieren (localStorage) — überlebt
+        // Seiten-Reload, Tab-Schließen & Server-Neustarts (der Server hält
+        // ohnehin keinen State/Volume, s. fly.toml — daher bewusst client-seitig).
+        // ============================================================
+        const STANDORT_STORAGE_KEY = 'ki_immo_standort_reports_v1';
+        const STANDORT_MAX_STORED = 40;
+
+        function loadStandortReports() {
+            try {
+                const raw = localStorage.getItem(STANDORT_STORAGE_KEY);
+                return raw ? JSON.parse(raw) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveStandortReportsList(reports) {
+            try {
+                localStorage.setItem(STANDORT_STORAGE_KEY, JSON.stringify(reports.slice(0, STANDORT_MAX_STORED)));
+            } catch (e) {
+                console.warn('Standortanalysen konnten nicht gespeichert werden (localStorage voll?)', e);
+            }
+        }
+
+        function persistStandortReport(report) {
+            const reports = loadStandortReports();
+            reports.unshift(report); // neueste zuerst
+            saveStandortReportsList(reports);
+            renderStandortReportsList();
+        }
+
+        function deleteStandortReport(id) {
+            saveStandortReportsList(loadStandortReports().filter(r => r.id !== id));
+            renderStandortReportsList();
+        }
+
+        function clearStandortReports() {
+            if (!confirm('Alle gespeicherten Standortanalysen löschen?')) return;
+            saveStandortReportsList([]);
+            renderStandortReportsList();
+        }
+
+        function openStoredStandortReport(id) {
+            const report = loadStandortReports().find(r => r.id === id);
+            if (!report) return;
+            const modal = document.getElementById('standort-modal');
+            document.getElementById('standort-modal-title').textContent = report.city;
+            document.getElementById('standort-modal-subtitle').textContent =
+                `${report.assetLabel} • gespeichert am ${new Date(report.timestamp).toLocaleString('de-DE')}`;
+            document.getElementById('standort-report-body').innerHTML = `<div>${renderStandortMarkdown(report.text)}</div>`;
+            lastStandortReportText = report.text;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function renderStandortReportsList() {
+            const reports = loadStandortReports();
+            const grid = document.getElementById('standort-reports-grid');
+            const countEl = document.getElementById('standort-reports-count');
+            if (!grid) return;
+            if (countEl) countEl.textContent = reports.length ? `${reports.length} gespeichert` : '';
+            if (!reports.length) {
+                grid.innerHTML = '<div class="text-zinc-500 text-sm">Noch keine Standortanalysen erstellt. Öffne „Top 50 Städte" und starte eine Analyse.</div>';
+                return;
+            }
+            grid.innerHTML = reports.map(r => `
+                <div class="bg-white/[0.04] backdrop-blur-xl border border-white/10 hover:border-violet-600 rounded-2xl p-4 transition-all">
+                    <div class="flex items-start justify-between gap-x-2">
+                        <button onclick="openStoredStandortReport('${r.id}')" class="text-left flex-1 min-w-0">
+                            <div class="font-semibold truncate">${escapeHtml(r.city)}</div>
+                            <div class="text-xs text-violet-400 mt-0.5">${escapeHtml(r.assetLabel)}</div>
+                            <div class="text-xs text-zinc-500 mt-1">${new Date(r.timestamp).toLocaleDateString('de-DE')} ${new Date(r.timestamp).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})}</div>
+                        </button>
+                        <button onclick="deleteStandortReport('${r.id}')" title="Löschen"
+                                class="text-zinc-500 hover:text-red-400 flex-shrink-0 px-1">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('') + `
+                <button onclick="clearStandortReports()" class="text-xs text-zinc-500 hover:text-red-400 col-span-full text-left mt-1">
+                    <i class="fa-solid fa-trash-can mr-1"></i>Alle löschen
+                </button>
+            `;
+        }
+
         function closeStandortModal() {
             document.getElementById('standort-modal').classList.add('hidden');
             document.getElementById('standort-modal').classList.remove('flex');
@@ -2309,6 +2415,19 @@
                 const finalText = buffer.replace(/\n?__STREAM_ERROR__.*$/s, '').trim();
                 lastStandortReportText = finalText;
                 bodyEl.innerHTML = `<div>${renderStandortMarkdown(finalText)}</div>`;
+
+                if (finalText) {
+                    persistStandortReport({
+                        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                        city: city.name,
+                        country: city.country,
+                        assetClass,
+                        assetLabel: assetLabels[assetClass] || 'Alle Asset-Klassen',
+                        rank: city.rank,
+                        text: finalText,
+                        timestamp: Date.now()
+                    });
+                }
             } catch (err) {
                 bodyEl.innerHTML = `<div class="text-center py-10 text-red-400 text-sm">
                     <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><br>${escapeHtml(err.message)}
@@ -2343,6 +2462,9 @@
 
             // GENESIS-Destatis: kuratierte Tabellen + Status laden
             initGenesis();
+
+            // Gespeicherte Standortanalysen (aus vorherigen Sessions) anzeigen
+            renderStandortReportsList();
             
             // Random subtle ticker refresh hint
             setTimeout(() => {

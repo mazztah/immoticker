@@ -23,7 +23,7 @@ import httpx
 
 log = logging.getLogger("genesis")
 
-GENESIS_BASE = "https://www-genesis.destatis.de/genesisWS/rest/2020"
+GENESIS_BASE = "https://genesis.destatis.de/genesisWS/rest/2020"
 GENESIS_API_KEY = os.getenv("GENESIS_API_KEY")
 
 _HTTP_TIMEOUT = httpx.Timeout(25.0, connect=10.0)
@@ -48,7 +48,7 @@ async def _get_json(path: str, params: dict[str, Any]) -> dict:
     query = {**_auth_params(), "language": "de"}
     query.update({k: v for k, v in params.items() if v not in (None, "")})
     url = f"{GENESIS_BASE}/{path}"
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
         resp = await client.get(url, params=query)
         resp.raise_for_status()
         data = resp.json()
@@ -150,7 +150,7 @@ async def chart_png(
     if endyear:
         query["endyear"] = endyear
     url = f"{GENESIS_BASE}/data/chart2table"
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True) as client:
         resp = await client.get(url, params=query)
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
