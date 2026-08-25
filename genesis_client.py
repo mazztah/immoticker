@@ -5,7 +5,7 @@ Offizielle Doku: https://genesis.destatis.de/genesisWS/swagger-ui/index.html
 Anwenderdokumentation "Webservice/API" (Statistisches Bundesamt), Version 5.0.
 
 Authentifizierung: Ein persönlicher API-Token wird anstelle des Benutzernamens
-übergeben, das Passwort bleibt dabei leer (siehe Kap. 2.1.3 der Anwenderdoku).
+übergeben; der Passwort-Parameter wird bei Token-Nutzung nicht gesendet.
 
 Alle Requests laufen GET-basiert (Query-Parameter), da die Datenmengen für die
 hier genutzten Tabellen klein sind und keine Jobs (job=true) benötigt werden.
@@ -23,8 +23,14 @@ import httpx
 
 log = logging.getLogger("genesis")
 
-GENESIS_BASE = "https://genesis.destatis.de/genesisWS/rest/2020"
+GENESIS_BASE = os.getenv("GENESIS_BASE_URL", "https://www-genesis.destatis.de/genesisWS/rest/2020")
+_GENESIS_FALLBACK_BASES = (
+    "https://www-genesis.destatis.de/genesisWS/rest/2020",
+    "https://genesis.destatis.de/genesisWS/rest/2020",
+)
 GENESIS_API_KEY = os.getenv("GENESIS_API_KEY")
+GENESIS_USERNAME = os.getenv("GENESIS_USERNAME")
+GENESIS_PASSWORD = os.getenv("GENESIS_PASSWORD")
 
 _HTTP_TIMEOUT = httpx.Timeout(25.0, connect=10.0)
 
@@ -40,12 +46,37 @@ _HEADERS = {
 
 
 def has_genesis_key() -> bool:
-    return bool(GENESIS_API_KEY)
+    token = os.getenv("GENESIS_API_KEY") or GENESIS_API_KEY
+    username = os.getenv("GENESIS_USERNAME") or GENESIS_USERNAME
+    password = os.getenv("GENESIS_PASSWORD") or GENESIS_PASSWORD
+    return bool(token or (username and password))
 
 
 def _auth_params() -> dict[str, str]:
-    # Persönlicher Token ersetzt den Benutzernamen; Passwort entfällt dann (Kap. 2.1.3).
-    return {"username": GENESIS_API_KEY or "", "password": ""}
+    # Persönlicher Token ersetzt den Benutzernamen. Wichtig: Bei Token-Nutzung
+    # KEINEN leeren password-Parameter mitschicken; GENESIS leitet solche
+    # Requests aktuell auf die Web-Oberfläche (/datenbank/online/announcement) um.
+    token = os.getenv("GENESIS_API_KEY") or GENESIS_API_KEY
+    if token:
+        return {"username": token}
+    return {
+        "username": os.getenv("GENESIS_USERNAME") or GENESIS_USERNAME or "",
+        "password": os.getenv("GENESIS_PASSWORD") or GENESIS_PASSWORD or "",
+    }
+
+
+def _safe_url(url: httpx.URL | str) -> str:
+    """URL für Logs ohne sensible GENESIS-Zugangsdaten."""
+    text = str(url)
+    secrets = (
+        os.getenv("GENESIS_API_KEY") or GENESIS_API_KEY,
+        os.getenv("GENESIS_USERNAME") or GENESIS_USERNAME,
+        os.getenv("GENESIS_PASSWORD") or GENESIS_PASSWORD,
+    )
+    for secret in secrets:
+        if secret:
+            text = text.replace(secret, "***")
+    return text
 
 
 class GenesisError(RuntimeError):
@@ -53,22 +84,36 @@ class GenesisError(RuntimeError):
 
 
 async def _get_json(path: str, params: dict[str, Any]) -> dict:
-    if not GENESIS_API_KEY:
-        raise GenesisError("GENESIS_API_KEY ist nicht gesetzt.")
+    if not has_genesis_key():
+        raise GenesisError("GENESIS_API_KEY oder GENESIS_USERNAME/GENESIS_PASSWORD ist nicht gesetzt.")
     query = {**_auth_params(), "language": "de"}
     query.update({k: v for k, v in params.items() if v not in (None, "")})
-    url = f"{GENESIS_BASE}/{path}"
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True, headers=_HEADERS) as client:
-        resp = await client.get(url, params=query)
+    bases = (GENESIS_BASE, *[base for base in _GENESIS_FALLBACK_BASES if base != GENESIS_BASE])
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=False, headers=_HEADERS) as client:
+        resp = None
+        for base in bases:
+            resp = await client.get(f"{base}/{path}", params=query)
+            if resp.status_code not in {301, 302, 303, 307, 308}:
+                break
+            log.warning(
+                "GENESIS leitete API-Request um (%s -> %s)",
+                _safe_url(resp.url),
+                _safe_url(resp.headers.get("location", "")),
+            )
+        if resp is None or resp.status_code in {301, 302, 303, 307, 308}:
+            raise GenesisError(
+                "GENESIS hat den API-Aufruf auf die Web-Oberfläche umgeleitet. "
+                "Bitte GENESIS_API_KEY prüfen oder später erneut versuchen."
+            )
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
         if "json" not in content_type:
             # Wurde (z.B. wegen Bot-Erkennung oder abgelaufenem Token) auf die
             # HTML-Weboberfläche statt auf die JSON-API umgeleitet.
-            log.warning("GENESIS lieferte kein JSON zurück (%s), Endpunkt: %s", content_type, resp.url)
+            log.warning("GENESIS lieferte kein JSON zurück (%s), Endpunkt: %s", content_type, _safe_url(resp.url))
             raise GenesisError(
                 f"GENESIS hat statt JSON-Daten eine Webseite geliefert (evtl. Wartung, "
-                f"Bot-Schutz oder ungültiger/abgelaufener Token). Antwort kam von: {resp.url}"
+                f"Bot-Schutz oder ungültiger/abgelaufener Token). Antwort kam von: {_safe_url(resp.url)}"
             )
         data = resp.json()
     status = data.get("Status", {})
@@ -134,10 +179,47 @@ def parse_ffcsv(raw_content: str) -> dict:
     if not raw_content:
         return {"header": [], "rows": []}
     reader = csv.reader(io.StringIO(raw_content), delimiter=";")
-    rows = [row for row in reader if any(cell.strip() for cell in row)]
+    raw_rows = [[cell.strip() for cell in row] for row in reader]
+    rows = [row for row in raw_rows if any(row)]
     if not rows:
         return {"header": [], "rows": []}
-    return {"header": rows[0], "rows": rows[1:]}
+
+    data_rows = rows
+    for marker in ("__DATA__", "Daten"):
+        marker_index = next(
+            (index for index, row in enumerate(rows) if len(row) == 1 and row[0] == marker),
+            None,
+        )
+        if marker_index is not None:
+            data_rows = rows[marker_index + 1 :]
+            break
+
+    for marker in ("__END__", "© Statistisches Bundesamt"):
+        marker_index = next(
+            (
+                index
+                for index, row in enumerate(data_rows)
+                if row and row[0].startswith(marker)
+            ),
+            None,
+        )
+        if marker_index is not None:
+            data_rows = data_rows[:marker_index]
+            break
+
+    data_rows = [row for row in data_rows if len(row) > 1]
+    if not data_rows:
+        return {"header": [], "rows": []}
+
+    header = data_rows[0]
+    body = data_rows[1:]
+    width = max(len(header), *(len(row) for row in body)) if body else len(header)
+    normalized_header = [
+        cell or f"Spalte {index + 1}"
+        for index, cell in enumerate(header + [""] * (width - len(header)))
+    ]
+    normalized_rows = [row + [""] * (width - len(row)) for row in body]
+    return {"header": normalized_header, "rows": normalized_rows}
 
 
 async def chart_png(
@@ -151,8 +233,8 @@ async def chart_png(
     Liefert ein von GENESIS serverseitig gerendertes Diagramm (PNG) zu einer
     Tabelle zurück -- roher Filedownload, kein JSON-Wrapper (Kap. 2.5.2).
     """
-    if not GENESIS_API_KEY:
-        raise GenesisError("GENESIS_API_KEY ist nicht gesetzt.")
+    if not has_genesis_key():
+        raise GenesisError("GENESIS_API_KEY oder GENESIS_USERNAME/GENESIS_PASSWORD ist nicht gesetzt.")
     query = {
         **_auth_params(),
         "language": "de",
@@ -169,9 +251,20 @@ async def chart_png(
         query["startyear"] = startyear
     if endyear:
         query["endyear"] = endyear
-    url = f"{GENESIS_BASE}/data/chart2table"
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True, headers=_HEADERS) as client:
-        resp = await client.get(url, params=query)
+    bases = (GENESIS_BASE, *[base for base in _GENESIS_FALLBACK_BASES if base != GENESIS_BASE])
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=False, headers=_HEADERS) as client:
+        resp = None
+        for base in bases:
+            resp = await client.get(f"{base}/data/chart2table", params=query)
+            if resp.status_code not in {301, 302, 303, 307, 308}:
+                break
+            log.warning(
+                "GENESIS leitete Chart-Request um (%s -> %s)",
+                _safe_url(resp.url),
+                _safe_url(resp.headers.get("location", "")),
+            )
+        if resp is None or resp.status_code in {301, 302, 303, 307, 308}:
+            raise GenesisError("GENESIS hat den Diagramm-Aufruf auf die Web-Oberfläche umgeleitet.")
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
         if "image" not in content_type:
@@ -182,7 +275,7 @@ async def chart_png(
                 msg = err.get("Status", {}).get("Content", "Diagramm nicht verfügbar")
             except Exception:
                 if "html" in content_type:
-                    msg = f"GENESIS hat eine Webseite statt eines Diagramms geliefert (Antwort von: {resp.url})"
+                    msg = f"GENESIS hat eine Webseite statt eines Diagramms geliefert (Antwort von: {_safe_url(resp.url)})"
                 else:
                     msg = "Diagramm nicht verfügbar"
             raise GenesisError(msg)
