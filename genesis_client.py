@@ -23,7 +23,11 @@ import httpx
 
 log = logging.getLogger("genesis")
 
-GENESIS_BASE = "https://genesis.destatis.de/genesisWS/rest/2020"
+GENESIS_BASE = os.getenv("GENESIS_BASE_URL", "https://www-genesis.destatis.de/genesisWS/rest/2020")
+_GENESIS_FALLBACK_BASES = (
+    "https://www-genesis.destatis.de/genesisWS/rest/2020",
+    "https://genesis.destatis.de/genesisWS/rest/2020",
+)
 GENESIS_API_KEY = os.getenv("GENESIS_API_KEY")
 
 _HTTP_TIMEOUT = httpx.Timeout(25.0, connect=10.0)
@@ -57,9 +61,23 @@ async def _get_json(path: str, params: dict[str, Any]) -> dict:
         raise GenesisError("GENESIS_API_KEY ist nicht gesetzt.")
     query = {**_auth_params(), "language": "de"}
     query.update({k: v for k, v in params.items() if v not in (None, "")})
-    url = f"{GENESIS_BASE}/{path}"
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True, headers=_HEADERS) as client:
-        resp = await client.get(url, params=query)
+    bases = (GENESIS_BASE, *[base for base in _GENESIS_FALLBACK_BASES if base != GENESIS_BASE])
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=False, headers=_HEADERS) as client:
+        resp = None
+        for base in bases:
+            resp = await client.get(f"{base}/{path}", params=query)
+            if resp.status_code not in {301, 302, 303, 307, 308}:
+                break
+            log.warning(
+                "GENESIS leitete API-Request um (%s -> %s)",
+                resp.url,
+                resp.headers.get("location", ""),
+            )
+        if resp is None or resp.status_code in {301, 302, 303, 307, 308}:
+            raise GenesisError(
+                "GENESIS hat den API-Aufruf auf die Web-Oberfläche umgeleitet. "
+                "Bitte GENESIS_API_KEY prüfen oder später erneut versuchen."
+            )
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
         if "json" not in content_type:
@@ -134,10 +152,47 @@ def parse_ffcsv(raw_content: str) -> dict:
     if not raw_content:
         return {"header": [], "rows": []}
     reader = csv.reader(io.StringIO(raw_content), delimiter=";")
-    rows = [row for row in reader if any(cell.strip() for cell in row)]
+    raw_rows = [[cell.strip() for cell in row] for row in reader]
+    rows = [row for row in raw_rows if any(row)]
     if not rows:
         return {"header": [], "rows": []}
-    return {"header": rows[0], "rows": rows[1:]}
+
+    data_rows = rows
+    for marker in ("__DATA__", "Daten"):
+        marker_index = next(
+            (index for index, row in enumerate(rows) if len(row) == 1 and row[0] == marker),
+            None,
+        )
+        if marker_index is not None:
+            data_rows = rows[marker_index + 1 :]
+            break
+
+    for marker in ("__END__", "© Statistisches Bundesamt"):
+        marker_index = next(
+            (
+                index
+                for index, row in enumerate(data_rows)
+                if row and row[0].startswith(marker)
+            ),
+            None,
+        )
+        if marker_index is not None:
+            data_rows = data_rows[:marker_index]
+            break
+
+    data_rows = [row for row in data_rows if len(row) > 1]
+    if not data_rows:
+        return {"header": [], "rows": []}
+
+    header = data_rows[0]
+    body = data_rows[1:]
+    width = max(len(header), *(len(row) for row in body)) if body else len(header)
+    normalized_header = [
+        cell or f"Spalte {index + 1}"
+        for index, cell in enumerate(header + [""] * (width - len(header)))
+    ]
+    normalized_rows = [row + [""] * (width - len(row)) for row in body]
+    return {"header": normalized_header, "rows": normalized_rows}
 
 
 async def chart_png(
@@ -169,9 +224,20 @@ async def chart_png(
         query["startyear"] = startyear
     if endyear:
         query["endyear"] = endyear
-    url = f"{GENESIS_BASE}/data/chart2table"
-    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=True, headers=_HEADERS) as client:
-        resp = await client.get(url, params=query)
+    bases = (GENESIS_BASE, *[base for base in _GENESIS_FALLBACK_BASES if base != GENESIS_BASE])
+    async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT, follow_redirects=False, headers=_HEADERS) as client:
+        resp = None
+        for base in bases:
+            resp = await client.get(f"{base}/data/chart2table", params=query)
+            if resp.status_code not in {301, 302, 303, 307, 308}:
+                break
+            log.warning(
+                "GENESIS leitete Chart-Request um (%s -> %s)",
+                resp.url,
+                resp.headers.get("location", ""),
+            )
+        if resp is None or resp.status_code in {301, 302, 303, 307, 308}:
+            raise GenesisError("GENESIS hat den Diagramm-Aufruf auf die Web-Oberfläche umgeleitet.")
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
         if "image" not in content_type:

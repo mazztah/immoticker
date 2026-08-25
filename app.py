@@ -557,7 +557,10 @@ async def get_feeds(category: str = Query(..., description="Eine von: " + ", ".j
     if not selected:
         return JSONResponse({"error": f"Unbekannte Kategorie: {category}"}, status_code=400)
 
-    sem = asyncio.Semaphore(12)
+    # Fly shared-cpu-1x@256MB machines were OOM-killed while many feeds were
+    # parsed at once. Keep concurrency deliberately low so GENESIS/table
+    # requests are not interrupted by feed bursts.
+    sem = asyncio.Semaphore(4)
 
     async def bound_fetch(client, feed):
         async with sem:
