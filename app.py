@@ -25,6 +25,7 @@ from html import unescape
 
 import httpx
 import feedparser
+import genesis_client
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -48,6 +49,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 # SerpApi (Google-Suche) für die Standortanalyse-Websuche — dieselbe, im Schwesterprojekt
 # "telllmeeeeight" nachweislich funktionierende Anbindung (dort: search.py), hier 1:1 portiert.
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
+# GENESIS-Destatis (amtliche Statistik, RESTful/JSON-API) — Token wird in genesis_client.py
+# aus GENESIS_API_KEY gelesen (als "username" mit leerem Passwort verwendet, siehe dortige Doku).
 
 # Persona- & Profil-Links für den LinkedIn-Generator — bitte mit deinen echten URLs befüllen
 # (bewusst NICHT vom LLM generieren lassen, damit die Links garantiert korrekt sind).
@@ -1366,6 +1369,123 @@ async def generate_standortanalyse(payload: StandortanalyseRequest):
             yield f"\n__STREAM_ERROR__: {exc}"
 
     return StreamingResponse(token_stream(), media_type="text/plain; charset=utf-8")
+
+
+# ============================================================
+# GENESIS-DESTATIS — amtliche Statistik (Baupreise, Bevölkerung, Immobilienpreise, ...)
+# ============================================================
+
+@app.get("/api/genesis/status")
+async def genesis_status():
+    """Liefert, ob ein Token konfiguriert ist und ob er aktuell gültig ist."""
+    if not genesis_client.has_genesis_key():
+        return JSONResponse({"available": False, "reason": "GENESIS_API_KEY ist nicht gesetzt."})
+    try:
+        result = await genesis_client.logincheck()
+        return JSONResponse({"available": True, "status": result.get("Status", {})})
+    except genesis_client.GenesisError as exc:
+        return JSONResponse({"available": False, "reason": str(exc)}, status_code=502)
+    except Exception as exc:
+        logger.exception("GENESIS logincheck fehlgeschlagen")
+        return JSONResponse({"available": False, "reason": str(exc)}, status_code=502)
+
+
+@app.get("/api/genesis/tabellen")
+async def genesis_tabellen():
+    """Kuratierte Standard-Tabellen + weitere erkundbare Statistiken (statisch, kein API-Call nötig)."""
+    return JSONResponse({
+        "curated": genesis_client.CURATED_TABLES,
+        "explorable_statistics": genesis_client.EXPLORABLE_STATISTICS,
+    })
+
+
+@app.get("/api/genesis/statistik/{code}/tabellen")
+async def genesis_tabellen_zu_statistik(code: str):
+    """Live-Abfrage: welche Tabellen gehören zu einer Statistik-Nummer (z.B. 61262, 31111)."""
+    if not genesis_client.has_genesis_key():
+        return JSONResponse({"error": "GENESIS_API_KEY ist nicht konfiguriert."}, status_code=503)
+    try:
+        tables = await genesis_client.tables_for_statistic(code)
+        return JSONResponse({"statistic": code, "tables": tables})
+    except genesis_client.GenesisError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    except Exception as exc:
+        logger.exception("GENESIS tables_for_statistic fehlgeschlagen")
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+@app.get("/api/genesis/suche")
+async def genesis_suche(begriff: str = Query(..., min_length=2), kategorie: str = "all"):
+    """Volltextsuche über GENESIS-Tabellen/Statistiken/Merkmale zu einem Suchbegriff."""
+    if not genesis_client.has_genesis_key():
+        return JSONResponse({"error": "GENESIS_API_KEY ist nicht konfiguriert."}, status_code=503)
+    try:
+        result = await genesis_client.find(begriff, category=kategorie)
+        return JSONResponse({
+            "tables": result.get("Tables") or [],
+            "statistics": result.get("Statistics") or [],
+            "cubes": result.get("Cubes") or [],
+            "variables": result.get("Variables") or [],
+        })
+    except genesis_client.GenesisError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    except Exception as exc:
+        logger.exception("GENESIS find fehlgeschlagen")
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+@app.get("/api/genesis/tabelle/{code}")
+async def genesis_tabelle_daten(
+    code: str,
+    startyear: str | None = Query(None),
+    endyear: str | None = Query(None),
+    regionalvariable: str | None = Query(None),
+    regionalkey: str | None = Query(None),
+):
+    """Rohdaten einer Tabelle, geparst aus dem ffcsv-Format in {header, rows}."""
+    if not genesis_client.has_genesis_key():
+        return JSONResponse({"error": "GENESIS_API_KEY ist nicht konfiguriert."}, status_code=503)
+    try:
+        raw = await genesis_client.table_data(
+            code,
+            startyear=startyear,
+            endyear=endyear,
+            regionalvariable=regionalvariable,
+            regionalkey=regionalkey,
+        )
+        obj = raw.get("Object") or {}
+        parsed = genesis_client.parse_ffcsv(obj.get("Content", ""))
+        return JSONResponse({
+            "code": code,
+            "title": obj.get("Content_de") or obj.get("Title") or code,
+            "header": parsed["header"],
+            "rows": parsed["rows"][:500],  # Sicherheitslimit für sehr lange Reihen
+            "row_count": len(parsed["rows"]),
+        })
+    except genesis_client.GenesisError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    except Exception as exc:
+        logger.exception("GENESIS table_data fehlgeschlagen")
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
+@app.get("/api/genesis/chart/{code}")
+async def genesis_chart(
+    code: str,
+    startyear: str | None = Query(None),
+    endyear: str | None = Query(None),
+):
+    """Von GENESIS serverseitig gerendertes Liniendiagramm (PNG) zu einer Tabelle."""
+    if not genesis_client.has_genesis_key():
+        return JSONResponse({"error": "GENESIS_API_KEY ist nicht konfiguriert."}, status_code=503)
+    try:
+        png_bytes = await genesis_client.chart_png(code, startyear=startyear, endyear=endyear)
+        return StreamingResponse(iter([png_bytes]), media_type="image/png")
+    except genesis_client.GenesisError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    except Exception as exc:
+        logger.exception("GENESIS chart_png fehlgeschlagen")
+        return JSONResponse({"error": str(exc)}, status_code=502)
 
 
 if __name__ == "__main__":

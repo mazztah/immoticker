@@ -342,6 +342,7 @@
                     <a href="#re-de" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Immobilien DE</a>
                     <a href="#inv" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Investoren</a>
                     <a href="#dev" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Dev</a>
+                    <a href="#statistik" class="px-4 py-2 hover:bg-white/[0.06] backdrop-blur-xl rounded-xl transition-colors">Statistik</a>
                     <a href="#top50" class="px-5 py-2 bg-violet-600 hover:bg-violet-500 transition-all text-white rounded-2xl font-semibold flex items-center gap-x-2 text-sm">
                         <i class="fa-solid fa-rss"></i>
                         <span>Alle 344 RSS</span>
@@ -704,6 +705,43 @@
         </div>
     </div>
 
+    <!-- GENESIS-DESTATIS SECTION -->
+    <div id="statistik" class="max-w-screen-2xl mx-auto px-6 py-8 border-t border-white/10">
+        <div class="flex items-end justify-between mb-6 cursor-pointer" onclick="toggleSection('statistik')">
+            <div>
+                <span class="category-pill dev text-sm px-4 py-1">AMTLICHE STATISTIK</span>
+                <h2 class="text-4xl font-display tracking-tight mt-1">GENESIS-Destatis</h2>
+                <p class="text-zinc-400">Offizielle Zeitreihen des Statistischen Bundesamtes — Baupreise, Bevölkerung, Immobilienpreise &amp; mehr, live per API. <span id="genesis-status" class="text-violet-500">wird geprüft…</span></p>
+            </div>
+            <i id="statistik-chevron" class="fa-solid fa-chevron-down text-violet-600 text-xl transition-transform"></i>
+        </div>
+
+        <div id="statistik-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6" id="genesis-curated-grid">
+                <!-- Live geladen -->
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 mb-6 items-stretch sm:items-center">
+                <select id="genesis-explore-select" class="bg-black/30 backdrop-blur-md border border-white/15 px-4 py-2.5 rounded-2xl text-sm">
+                    <option value="">Weitere Statistik erkunden…</option>
+                </select>
+                <button onclick="exploreGenesisStatistic()"
+                        class="px-5 py-2.5 bg-white/[0.06] backdrop-blur-xl hover:bg-zinc-800 border border-white/15 hover:border-violet-600 transition-all rounded-2xl text-sm font-medium active:scale-95">
+                    <i class="fa-solid fa-magnifying-glass mr-2"></i>Tabellen laden
+                </button>
+                <div id="genesis-explore-results" class="text-sm text-zinc-400 flex-1"></div>
+            </div>
+
+            <div id="genesis-result" class="hidden bg-white/[0.04] backdrop-blur-xl border border-white/10 rounded-3xl p-5 sm:p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 id="genesis-result-title" class="text-xl font-semibold"></h3>
+                    <button onclick="closeGenesisResult()" class="text-zinc-400 hover:text-white text-xl leading-none">×</button>
+                </div>
+                <div id="genesis-result-body" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- TOP 50 RSS SECTION -->
     <div id="top50" class="max-w-screen-2xl mx-auto px-6 py-10 border-t border-white/10 bg-white/[0.06] backdrop-blur-xl/30">
         <div class="max-w-5xl mx-auto">
@@ -1014,6 +1052,137 @@
             const chevron = document.getElementById(sectionId + '-chevron');
             body.classList.toggle('hidden');
             chevron.classList.toggle('rotate-180');
+        }
+
+        // ============================================================
+        // GENESIS-DESTATIS — amtliche Statistik
+        // ============================================================
+        async function initGenesis() {
+            const statusEl = document.getElementById('genesis-status');
+            try {
+                const statusRes = await fetch('/api/genesis/status');
+                const status = await statusRes.json();
+                if (status.available) {
+                    statusEl.textContent = 'API verbunden ✓';
+                    statusEl.className = 'text-emerald-400';
+                } else {
+                    statusEl.textContent = status.reason || 'nicht verfügbar';
+                    statusEl.className = 'text-amber-400';
+                }
+            } catch (e) {
+                statusEl.textContent = 'Status konnte nicht geprüft werden';
+                statusEl.className = 'text-amber-400';
+            }
+
+            try {
+                const res = await fetch('/api/genesis/tabellen');
+                const data = await res.json();
+                const grid = document.getElementById('genesis-curated-grid');
+                grid.innerHTML = (data.curated || []).map(t => `
+                    <button onclick="showGenesisTabelle('${t.code}', ${JSON.stringify(t.label).replace(/"/g, '&quot;')})"
+                            class="text-left bg-white/[0.04] backdrop-blur-xl border border-white/10 hover:border-violet-600 rounded-2xl p-4 transition-all active:scale-95">
+                        <div class="text-xs text-violet-400 font-semibold mb-1">${t.category}</div>
+                        <div class="font-semibold mb-1">${t.label}</div>
+                        <div class="text-xs text-zinc-400 line-clamp-3">${t.description}</div>
+                        <div class="text-[10px] text-zinc-600 font-mono mt-2">${t.code}</div>
+                    </button>
+                `).join('');
+
+                const select = document.getElementById('genesis-explore-select');
+                (data.explorable_statistics || []).forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.code;
+                    opt.textContent = `${s.label} (${s.code})`;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('GENESIS Tabellen konnten nicht geladen werden', e);
+            }
+        }
+
+        async function exploreGenesisStatistic() {
+            const code = document.getElementById('genesis-explore-select').value;
+            const resultsEl = document.getElementById('genesis-explore-results');
+            if (!code) return;
+            resultsEl.textContent = 'Lade Tabellen…';
+            try {
+                const res = await fetch(`/api/genesis/statistik/${encodeURIComponent(code)}/tabellen`);
+                const data = await res.json();
+                if (data.error) {
+                    resultsEl.textContent = data.error;
+                    return;
+                }
+                const tables = data.tables || [];
+                if (!tables.length) {
+                    resultsEl.textContent = 'Keine Tabellen gefunden.';
+                    return;
+                }
+                resultsEl.innerHTML = tables.slice(0, 12).map(t => `
+                    <button onclick="showGenesisTabelle('${t.Code}', ${JSON.stringify(t.Content || t.Code).replace(/"/g, '&quot;')})"
+                            class="inline-block mr-2 mb-2 px-3 py-1.5 bg-white/[0.06] hover:bg-zinc-800 border border-white/15 hover:border-violet-600 rounded-xl text-xs transition-all">
+                        ${t.Code}
+                    </button>
+                `).join('');
+            } catch (e) {
+                resultsEl.textContent = 'Fehler beim Laden der Tabellen.';
+            }
+        }
+
+        async function showGenesisTabelle(code, label) {
+            const panel = document.getElementById('genesis-result');
+            const titleEl = document.getElementById('genesis-result-title');
+            const bodyEl = document.getElementById('genesis-result-body');
+            panel.classList.remove('hidden');
+            titleEl.textContent = label || code;
+            bodyEl.innerHTML = '<div class="text-zinc-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Lade Daten von GENESIS-Destatis…</div>';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            try {
+                const [dataRes] = await Promise.all([
+                    fetch(`/api/genesis/tabelle/${encodeURIComponent(code)}`),
+                ]);
+                const tableData = await dataRes.json();
+
+                if (tableData.error) {
+                    bodyEl.innerHTML = `<div class="text-amber-400 text-sm">${tableData.error}</div>`;
+                    return;
+                }
+
+                const rows = tableData.rows || [];
+                const header = tableData.header || [];
+                const previewRows = rows.slice(-12).reverse();
+
+                let tableHtml = '<div class="text-zinc-500 text-sm">Keine Datenzeilen erhalten.</div>';
+                if (previewRows.length) {
+                    tableHtml = `
+                        <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead><tr class="text-left text-zinc-400 border-b border-white/10">
+                                ${header.map(h => `<th class="py-2 pr-4 font-medium">${h}</th>`).join('')}
+                            </tr></thead>
+                            <tbody>
+                                ${previewRows.map(r => `<tr class="border-b border-white/5">${r.map(c => `<td class="py-1.5 pr-4 text-zinc-300">${c}</td>`).join('')}</tr>`).join('')}
+                            </tbody>
+                        </table>
+                        </div>
+                        <div class="text-xs text-zinc-500 mt-2">${tableData.row_count} Zeilen insgesamt · neueste zuerst · Quelle: © Statistisches Bundesamt (Destatis), Datenlizenz Deutschland – Namensnennung 2.0</div>
+                    `;
+                }
+
+                bodyEl.innerHTML = `
+                    <img src="/api/genesis/chart/${encodeURIComponent(code)}"
+                         alt="Diagramm ${code}"
+                         class="w-full rounded-xl border border-white/10 bg-white"
+                         onerror="this.style.display='none'" />
+                    ${tableHtml}
+                `;
+            } catch (e) {
+                bodyEl.innerHTML = '<div class="text-amber-400 text-sm">Fehler beim Laden der Daten.</div>';
+            }
+        }
+
+        function closeGenesisResult() {
+            document.getElementById('genesis-result').classList.add('hidden');
         }
         
         // Startet für jede Kategorie sofort einen echten Live-Ladevorgang übers Backend
@@ -2171,6 +2340,9 @@
             
             // Render Top 50 Cities sidebar (Kaufkraft + Straßenebene)
             renderCityList();
+
+            // GENESIS-Destatis: kuratierte Tabellen + Status laden
+            initGenesis();
             
             // Random subtle ticker refresh hint
             setTimeout(() => {

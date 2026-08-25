@@ -127,6 +127,26 @@ das behebt die Mehrzahl der bisherigen Ausfälle. Ein paar einzelne Feeds könne
 zeitweise ausfallen (z.B. wenn eine Quelle selbst offline ist oder Bot-Traffic blockt) —
 das Frontend zeigt das transparent an ("X/Y Quellen live").
 
+## GENESIS-Destatis (amtliche Statistik, `GENESIS_API_KEY`)
+
+Die Sektion **"Statistik"** bindet die [GENESIS-RESTful/JSON-API](https://genesis.destatis.de/genesisWS/swagger-ui/index.html)
+des Statistischen Bundesamts an (`genesis_client.py`) — offizielle, kostenlose Zeitreihen wie
+Baupreisindex, Bevölkerungsstand, Häuserpreisindex und Baugenehmigungen, direkt als Diagramm
+(von GENESIS serverseitig gerendert) und Datentabelle im Frontend.
+
+- Umgebungsvariable `GENESIS_API_KEY` setzen (Fly: `fly secrets set GENESIS_API_KEY=dein_token`).
+  Der Wert ist der **persönliche API-Token** aus dem GENESIS-Weboberflächen-Modal
+  "Webservice-Schnittstelle (API)" — er wird intern als `username` mit leerem `password` verwendet
+  (siehe GENESIS-Anwenderdokumentation "Webservice/API", Kap. 2.1.3).
+- **Ohne** `GENESIS_API_KEY` bleibt die Sektion sichtbar, zeigt aber einen Hinweis
+  ("nicht konfiguriert") statt Daten — kein harter Fehler für den Rest der App.
+- Kuratierte Standard-Tabellen (Baupreise, Bevölkerung) sind mit fest geprüften Tabellencodes
+  hinterlegt (`genesis_client.CURATED_TABLES`). Für weitere Themen (Häuserpreisindex,
+  Baugenehmigungen, Verbraucherpreise/Mieten) lädt das Frontend die verfügbaren Tabellen live
+  über `catalogue/tables2statistic`, da sich die exakten Tabellencodes dort gelegentlich ändern.
+- Rate-Limits: GENESIS begrenzt parallel laufende Requests (siehe Kap. 1.7 der Anwenderdoku) —
+  bei sehr hoher Last kann `helloworld/logincheck` hängende Requests serverseitig beenden.
+
 ## Endpunkte
 
 - `GET /` — Frontend
@@ -135,3 +155,9 @@ das Frontend zeigt das transparent an ("X/Y Quellen live").
 - `GET /api/feeds/meta` — komplette Feed-Datenbank (Name, URL, Kategorie, Beschreibung)
 - `POST /api/chat` — KI-Chat, Body: `{"message": "...", "session_id": "...", "articles": [...]}`
 - `POST /api/linkedin` — LinkedIn-Artikel-Generator, Body: `{"articles": [...]}`
+- `GET /api/genesis/status` — prüft, ob `GENESIS_API_KEY` gesetzt & gültig ist
+- `GET /api/genesis/tabellen` — kuratierte Standard-Tabellen + erkundbare Statistiken
+- `GET /api/genesis/statistik/{code}/tabellen` — live: Tabellen zu einer Statistik-Nummer
+- `GET /api/genesis/suche?begriff=...` — Volltextsuche über GENESIS-Tabellen/Statistiken
+- `GET /api/genesis/tabelle/{code}` — Datenzeilen einer Tabelle (JSON, geparst aus ffcsv)
+- `GET /api/genesis/chart/{code}` — von GENESIS gerendertes Liniendiagramm (PNG)
