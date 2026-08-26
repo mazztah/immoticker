@@ -240,6 +240,45 @@ CURATED_TABLES: list[dict] = [
         "kleinräumige Standortanalysen.",
         "category": "Bevölkerung",
     },
+    {
+        "code": "61111-0001",
+        "statistic": "61111",
+        "label": "Verbraucherpreisindex Deutschland",
+        "description": "Verbraucherpreisindex (Inflation), Jahreswerte für Deutschland -- "
+        "wichtige Referenzgröße für Mietpreisanpassungen und Kaufkraft.",
+        "category": "Preise",
+    },
+    {
+        "code": "61511-0001",
+        "statistic": "61511",
+        "label": "Kaufwerte für Bauland",
+        "description": "Durchschnittlicher Kaufwert für baureifes Land in Deutschland "
+        "(Euro pro Quadratmeter) -- zentraler Indikator der Grundstücksmarktbeobachtung.",
+        "category": "Grundstücke",
+    },
+    {
+        "code": "13111-0001",
+        "statistic": "13111",
+        "label": "Sozialversicherungspflichtig Beschäftigte: Deutschland",
+        "description": "Beschäftigte am Arbeitsort, Stichtag, nach Geschlecht und "
+        "Altersgruppen -- Indikator für lokale Arbeitsmarktstärke.",
+        "category": "Arbeitsmarkt",
+    },
+    {
+        "code": "13111-0005",
+        "statistic": "13111",
+        "label": "Sozialversicherungspflichtig Beschäftigte: Bundesländer",
+        "description": "Beschäftigte am Arbeitsort nach Bundesland, Stichtag, Geschlecht.",
+        "category": "Arbeitsmarkt",
+    },
+    {
+        "code": "11111-0002",
+        "statistic": "11111",
+        "label": "Gebietsfläche: Kreise",
+        "description": "Gebietsfläche nach Kreisen, Stichtag -- Grundlage für "
+        "Bevölkerungs- und Bebauungsdichte-Berechnungen.",
+        "category": "Fläche",
+    },
 ]
 
 # Statistiken, zu denen es weitere (nicht fest kodierte) Tabellen gibt --
@@ -250,4 +289,11 @@ EXPLORABLE_STATISTICS: list[dict] = [
     {"code": "61111", "label": "Verbraucherpreise (u.a. Wohnen/Mieten)"},
     {"code": "61261", "label": "Baupreisindizes (Bauwirtschaft)"},
     {"code": "12411", "label": "Bevölkerungsstand (Fortschreibung)"},
+    {"code": "61511", "label": "Kaufwerte für Bauland (Grundstücksmarkt)"},
+    {"code": "13111", "label": "Sozialversicherungspflichtig Beschäftigte"},
+    {"code": "13211", "label": "Arbeitslose, Arbeitslosenquoten"},
+    {"code": "81000", "label": "Volkswirtschaftliche Gesamtrechnungen (BIP)"},
+    {"code": "45212", "label": "Umsatz im Einzelhandel"},
+    {"code": "11111", "label": "Gebietsfläche (Bundesländer/Kreise)"},
+    {"code": "44111", "label": "Bauhauptgewerbe (Auftragseingang/Umsatz)"},
 ]
