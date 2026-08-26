@@ -82,8 +82,10 @@ async def _post_json(path: str, body_params: dict[str, Any]) -> dict:
             )
         data = resp.json()
     status = data.get("Status", {})
-    # Code 0 = erfolgreich, Warnungen (z.B. Code 22) liefern trotzdem Daten.
-    if status.get("Type") == "Error":
+    # Achtung: helloworld/logincheck liefert "Status" laut Doku als reinen String
+    # (z.B. "Sie wurden erfolgreich an- und abgemeldet!"), alle anderen Methoden
+    # als Objekt {Code, Content, Type}. Nur im Objekt-Fall auf Error prüfen.
+    if isinstance(status, dict) and status.get("Type") == "Error":
         raise GenesisError(status.get("Content", "Unbekannter GENESIS-Fehler"))
     return data
 

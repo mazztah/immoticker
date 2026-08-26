@@ -1382,7 +1382,12 @@ async def genesis_status():
         return JSONResponse({"available": False, "reason": "GENESIS_API_KEY ist nicht gesetzt."})
     try:
         result = await genesis_client.logincheck()
-        return JSONResponse({"available": True, "status": result.get("Status", {})})
+        status_value = result.get("Status", "")
+        return JSONResponse({
+            "available": True,
+            "status": status_value,
+            "username": result.get("Username", ""),
+        })
     except genesis_client.GenesisError as exc:
         return JSONResponse({"available": False, "reason": str(exc)}, status_code=502)
     except Exception as exc:
